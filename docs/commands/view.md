@@ -56,7 +56,7 @@ The site is in English. It has four views, each a page with its own filters:
 
 The filters are status, task, repo, agent, a date range and text. Decisions and open points that are closed are hidden until "Show closed" is ticked; when all of them are closed, the page says so.
 
-Each note has a Markdown download. Each view has a "Download this view" button that exports only what is currently filtered.
+Each note has a Markdown download. Each view has a "Download this view" button that exports only what is currently filtered. In a downloaded list of decisions or open points, a closed entry ends with `(superseded by <id>)` or `(resolved by <id>)`, as in `cairn list`.
 
 The pages work when opened straight from disk (`file://`) with no server, so `--serve` is optional.
 

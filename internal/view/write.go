@@ -118,6 +118,9 @@ type dataEntry struct {
 	By    string `json:"by"`
 	Note  string `json:"note"`
 	Agent string `json:"agent"`
+	// Closed is "superseded by <id>" or "resolved by <id>" for a closed entry, else empty,
+	// so a downloaded view never shows a closed entry as current.
+	Closed string `json:"closed,omitempty"`
 }
 
 type dataFile struct {
@@ -271,7 +274,11 @@ func buildData(s *Site) ([]byte, error) {
 		d.Notes[nv.Header.ID] = nv.Markdown
 	}
 	for _, e := range s.Entries {
-		d.Entries[e.ID] = dataEntry{Text: e.Text, By: e.By, Note: e.NoteID, Agent: e.Agent}
+		de := dataEntry{Text: e.Text, By: e.By, Note: e.NoteID, Agent: e.Agent}
+		if e.Closed {
+			de.Closed = closerVerb(e.Type) + " " + e.ClosedBy
+		}
+		d.Entries[e.ID] = de
 	}
 	// json.Marshal escapes <, > and &, so no "</script" can appear.
 	b, err := json.Marshal(d)

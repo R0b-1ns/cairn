@@ -33,14 +33,16 @@
     return out;
   }
 
-  // entriesMarkdown is a Markdown list: - `e-id` [by] text (note n-id)
+  // entriesMarkdown is a Markdown list: - `e-id` [by] text (note n-id), then "  (superseded by id)"
+  // or "  (resolved by id)" for a closed entry, as in `cairn list`.
   function entriesMarkdown(data, ids) {
     var out = "";
     for (var i = 0; i < ids.length; i++) {
       var e = data.entries[ids[i]];
       if (!e) continue;
       var text = String(e.text).replace(/\s*\n\s*/g, " ");
-      out += "- `" + ids[i] + "` " + (e.by ? "[" + e.by + "] " : "") + text + " (note " + e.note + ")\n";
+      out += "- `" + ids[i] + "` " + (e.by ? "[" + e.by + "] " : "") + text + " (note " + e.note + ")" +
+        (e.closed ? "  (" + e.closed + ")" : "") + "\n";
     }
     return out;
   }

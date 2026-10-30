@@ -403,7 +403,7 @@ func TestDataJSCarriesAgentAndMarkdown(t *testing.T) {
 		Header  string            `json:"header"`
 		Notes   map[string]string `json:"notes"`
 		Entries map[string]struct {
-			Text, By, Note, Agent string
+			Text, By, Note, Agent, Closed string
 		} `json:"entries"`
 	}
 	if err := json.Unmarshal([]byte(strings.TrimSuffix(strings.TrimPrefix(data, pre), ";\n")), &got); err != nil {
@@ -418,6 +418,17 @@ func TestDataJSCarriesAgentAndMarkdown(t *testing.T) {
 	}
 	if got.Entries["e-aaaaa2"].By != "user" {
 		t.Fatalf("by %+v", got.Entries["e-aaaaa2"])
+	}
+	// A closed entry says what closed it, so "Download this view" with "Show closed" ticked
+	// cannot pass a superseded decision or a resolved open point off as current.
+	if c := got.Entries["e-aaaaa2"].Closed; c != "superseded by n-bbbbbb" {
+		t.Fatalf("closed decision: %q", c)
+	}
+	if c := got.Entries["e-aaaaa3"].Closed; c != "resolved by a-aaaaa1" {
+		t.Fatalf("closed open point: %q", c)
+	}
+	if c := got.Entries["e-bbbbb1"].Closed; c != "" {
+		t.Fatalf("active entry: %q", c)
 	}
 }
 
@@ -471,11 +482,14 @@ assert.ok(!app.matches(row, {...any, text: "hash tree"}));
 assert.ok(!app.matches({...row, closed: true}, any));
 assert.ok(app.matches({...row, closed: true}, {...any, showClosed: true}));
 const data = {header: "# p\n\n", notes: {"n-1": "## one\n\n", "n-2": "## two\n\n"},
-  entries: {"e-1": {text: "use\na hash", by: "user", note: "n-1", agent: "a"}, "e-2": {text: "run it", by: "", note: "n-2", agent: "b"}}};
+  entries: {"e-1": {text: "use\na hash", by: "user", note: "n-1", agent: "a"}, "e-2": {text: "run it", by: "", note: "n-2", agent: "b"},
+    "e-3": {text: "use a tree", by: "agent", note: "n-1", agent: "a", closed: "superseded by a-1"}}};
 assert.strictEqual(app.notesMarkdown(data, ["n-2", "n-1"]), "# p\n\n## two\n\n## one\n\n");
 assert.strictEqual(app.notesMarkdown(data, []), "# p\n\n");
 assert.strictEqual(app.entriesMarkdown(data, ["e-1", "e-2"]),
   "- ` + "`e-1`" + ` [user] use a hash (note n-1)\n- ` + "`e-2`" + ` run it (note n-2)\n");
+assert.strictEqual(app.entriesMarkdown(data, ["e-3"]),
+  "- ` + "`e-3`" + ` [agent] use a tree (note n-1)  (superseded by a-1)\n");
 assert.ok(app.compare("2", "10", true) < 0);
 assert.ok(app.compare("b", "A", false) > 0);
 `
