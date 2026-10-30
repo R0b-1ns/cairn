@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/R0b-1ns/cairn/internal/locate"
 	"github.com/R0b-1ns/cairn/internal/model"
@@ -119,3 +120,8 @@ func splitList(s string) []string {
 	}
 	return out
 }
+
+// now is the clock; tests replace it.
+var now = time.Now
+
+func timestamp() string { return now().UTC().Format(time.RFC3339) }
