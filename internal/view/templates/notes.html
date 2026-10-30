@@ -1,0 +1,40 @@
+{{define "content"}}
+<header class="head">
+<h1>Notes</h1>
+<p class="tools"><span id="count" class="count">{{len .Content.Rows}} of {{len .Content.Rows}}</span>
+<button type="button" id="download-view" data-file="notes.md">Download this view as Markdown</button></p>
+</header>
+{{- if .Content.Rows}}
+<div class="table-wrap">
+<table id="rows" class="rows">
+<thead>
+<tr>
+<th scope="col" data-sort="at" aria-sort="descending"><button type="button">Date</button></th>
+<th scope="col" data-sort="task"><button type="button">Task</button></th>
+<th scope="col" data-sort="title"><button type="button">Title</button></th>
+<th scope="col" data-sort="repo"><button type="button">Repo</button></th>
+<th scope="col" data-sort="agent"><button type="button">Agent</button></th>
+<th scope="col" data-sort="status"><button type="button">Status</button></th>
+<th scope="col" data-sort="open" data-numeric="true"><button type="button">Open points</button></th>
+</tr>
+</thead>
+<tbody>
+{{- range .Content.Rows}}
+<tr data-id="{{.ID}}" data-status="{{.Status}}" data-task="{{.Task}}" data-repo="{{.Repo}}" data-agent="{{.Agent}}" data-at="{{.At}}" data-open="{{.OpenPoints}}" data-title="{{.Title}}" data-text="{{.Text}}">
+<td class="nowrap"><time datetime="{{.At}}">{{date .At}}</time></td>
+<td>{{dash .Task}}</td>
+<td><a href="notes/{{.ID}}.html">{{.Title}}</a></td>
+<td>{{.Repo}}</td>
+<td>{{.Agent}}</td>
+<td><span class="badge status-{{.Status}}">{{.Status}}</span></td>
+<td class="num">{{.OpenPoints}}</td>
+</tr>
+{{- end}}
+</tbody>
+</table>
+</div>
+{{- else}}
+<p class="empty">No notes yet.</p>
+{{- end}}
+<p class="empty" id="no-match" hidden>No matching notes.</p>
+{{end}}
