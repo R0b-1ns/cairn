@@ -526,3 +526,10 @@ func (s *Store) GetAddendum(id string) (model.Addendum, error) {
 	a.Resolves, a.Supersedes, err = loadLinks(s.db, "source_addendum_id", id)
 	return a, err
 }
+
+// CountNotes returns the number of notes.
+func (s *Store) CountNotes() (int, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM notes`).Scan(&n)
+	return n, err
+}

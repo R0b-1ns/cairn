@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -148,3 +149,5 @@ func fail(c *Ctx, code int, format string, a ...any) int {
 	fmt.Fprintf(c.Stderr, "cairn: "+strings.TrimRight(format, "\n")+"\n", a...)
 	return code
 }
+
+func errorsIs(err, target error) bool { return errors.Is(err, target) }
