@@ -18,10 +18,10 @@ base=https://github.com/R0b-1ns/cairn/releases/latest/download
 
 curl -fsSLO "$base/cairn-$os-$arch"
 curl -fsSLO "$base/SHA256SUMS"
-grep " cairn-$os-$arch\$" SHA256SUMS | shasum -a 256 -c -    # on Linux: sha256sum -c -
-chmod +x "cairn-$os-$arch"
-sudo mv "cairn-$os-$arch" /usr/local/bin/cairn
-cairn --version
+grep " cairn-$os-$arch\$" SHA256SUMS | shasum -a 256 -c - && \
+  chmod +x "cairn-$os-$arch" && \
+  sudo mv "cairn-$os-$arch" /usr/local/bin/cairn && \
+  cairn --version        # on Linux use: sha256sum -c -
 ```
 
 Supported platforms: macOS and Linux, on amd64 and arm64. With Go 1.27 or newer you can also build from source: `go install github.com/R0b-1ns/cairn/cmd/cairn@latest`.
@@ -48,7 +48,7 @@ cairn show n-4k7q2m                     # one full note
 
 # Add to a note without changing it
 cairn amend n-4k7q2m --agent builder --model claude-opus-5-5 \
-  --resolves e-7h2m9q --note "Pruning runs in the nightly job."
+  --resolves e-5t8w1k --note "Pruning runs in the nightly job."
 ```
 
 The IDs above are examples; every command prints the real ones.

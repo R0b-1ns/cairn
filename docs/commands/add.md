@@ -84,7 +84,7 @@ Prints `note n-4k7q2m added (TP-03, done)` and one `e-...` line for the change. 
 cairn add --agent builder --repo server --task TP-03 --model claude-opus-5-5 --title "Add tidal index" --status in_progress --change "Tidal index built for the server repo." --decision "user:Index buckets are hourly, to match the sensor rate." --open "Should old buckets be pruned after 90 days?" --none note,helper
 ```
 
-Prints the note ID and four entry lines (change, decision, open). The `user:` prefix is stored as `by: user`.
+Prints the note ID and three entry lines (change, decision, open). The `user:` prefix is stored as `by: user`.
 
 ```
 echo '{"agent":"builder","repo":"server","task":"TP-03","model":"claude-opus-5-5","title":"Add tidal index","status":"done","entries":[{"type":"change","text":"Added the hourly tidal index table."}],"none":["decision","open","note","helper"]}' | cairn add --stdin --json

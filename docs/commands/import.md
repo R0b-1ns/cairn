@@ -62,7 +62,7 @@ cairn export --format json --out /work/tidepool-notes.json
 cairn import /work/tidepool-notes.json --project tidepool
 ```
 
-The first command writes the export of `tidepool`. The second imports it into a machine where `tidepool` holds none of these IDs, and prints `imported 3 notes and 4 addenda (0 already present)`. The target project must use the same repos and task pattern.
+The first command writes the export of `tidepool`. The second imports it into a machine where `tidepool` holds none of these IDs, and prints `imported 3 notes and 4 addenda (0 already present)`. Every note is validated against the receiving project, so the repos and task IDs it uses must be valid there; the `project` object in the file is ignored.
 
 ```
 cat /work/tidepool-notes.json | cairn import -

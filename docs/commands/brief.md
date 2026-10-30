@@ -27,7 +27,7 @@ cairn brief <task-id> [--project NAME] [--json] [--max N]
 Text, for a task with notes:
 
 ```
-TP-03: 3 note(s)
+TP-03: 2 note(s)
 notes:
   n-4k7q2m  TP-03    done        2026-10-30  Add tidal index (server, builder)
   n-9x2c7d  TP-03.1  in_progress 2026-10-31  Split the sensor feed (client, builder)
@@ -42,9 +42,9 @@ open points:
 
 Sections are in this order: `notes` (oldest first), `changes` (oldest first), `decisions in force`, `open points`. An empty section prints `  none`. A change or open point taken from an addendum shows `(n-4k7q2m via a-9x3b2c)`. A task without notes prints `no notes for task TP-09`.
 
-`--json` prints one object with the keys `task`, `notes`, `changes`, `decisions`, `open`:
+`--json` prints one object with the keys `task`, `notes`, `changes`, `decisions`, `open`, and the totals `notes_total`, `changes_total`, `decisions_total`, `open_total`. Each list is capped by `--max`; the totals count everything that matched, so a consumer can tell when a list was cut.
 
-- `notes`: objects with the keys `ID`, `Task`, `Repo`, `Agent`, `Model`, `At`, `Title`, `Status` (capitalized, as written by cairn).
+- `notes`: objects with the keys `id`, `task`, `repo`, `agent`, `model`, `at`, `title`, `status` (the current status).
 - `changes`, `decisions`, `open`: entry objects with `id`, `type`, `text`, `by`, `note_id`, `addendum_id`, `task`, `repo`, `at`, `closed`, `closed_by`, `closed_at`.
 
 Empty lists are `[]`, never `null`.

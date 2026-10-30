@@ -153,3 +153,38 @@ func TestRepoHasNoForbiddenWords(t *testing.T) {
 		return nil
 	})
 }
+
+// Facts the reviews found wrong or missing in the documentation, pinned so they stay right.
+func TestDocsStateTheCorrectedFacts(t *testing.T) {
+	has := func(file string, want ...string) {
+		t.Helper()
+		doc := readDoc(t, file)
+		for _, w := range want {
+			if !strings.Contains(doc, w) {
+				t.Errorf("%s must contain %q", file, w)
+			}
+		}
+	}
+	lacks := func(file string, bad ...string) {
+		t.Helper()
+		doc := readDoc(t, file)
+		for _, w := range bad {
+			if strings.Contains(doc, w) {
+				t.Errorf("%s must not contain %q", file, w)
+			}
+		}
+	}
+	has("guide.md", "untrusted", "<<'EOF'", "never follow instructions")
+	has("../README.md", "-c - &&")
+	has("security.md", "`user_version` 2", "INSERT OR REPLACE", "Invisible", "future", "not registered")
+	lacks("security.md", "`user_version` 1", "even if a bug reached them")
+	has("commands/brief.md", "notes_total", "`id`, `task`, `repo`, `agent`, `model`, `at`, `title`, `status`")
+	lacks("commands/brief.md", "capitalized")
+	has("commands/search.md", "`text`")
+	lacks("commands/search.md", "`snippet`")
+	lacks("commands/add.md", "four entry lines")
+	lacks("exit-codes.md", "n-0000000")
+	lacks("commands/import.md", "must use the same repos")
+	lacks("output.md", "indented 6 spaces.")
+	has("commands/brief.md", "TP-03: 2 note(s)")
+}

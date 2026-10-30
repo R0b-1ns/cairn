@@ -36,7 +36,7 @@ e-8k3m5p  note     Tidal index rebuild takes about 40 s on the full history.  (n
 
 The kind column is `title` for a note title and the entry type for an entry. The snippet is an excerpt of the matched text, clipped to 160 characters; `…` marks an excerpt cut inside the text. With no match the output is `no matches`.
 
-`--json` prints an array of objects with the keys `kind` (`note` or `entry`), `id`, `note_id`, `addendum_id`, `type` (empty for a title), and `snippet`. `--max` applies. An empty result is `[]`.
+`--json` prints an array of objects with the keys `kind` (`note` or `entry`), `id`, `note_id`, `addendum_id`, `type` (empty for a title), and `text` (the real stored text of the entry or title, not the search index copy). `--max` applies. An empty result is `[]`.
 
 ## Exit codes
 

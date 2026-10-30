@@ -49,7 +49,7 @@ none: note, helper
 - `task` shows `-` when empty. `status` shows `status: <current>`. If the current status differs from the note's own, it adds `(set when written: <own>)`.
 - `impacts`, `commits`, `none` and `resolves`/`supersedes` lines appear only when they have values.
 - Each entry: two spaces, ID, two spaces, type padded to 8, a space, `[user]` or `[agent]` for decisions, the text. A closed entry ends with `  (resolved by <id>)` or `  (superseded by <id>)`.
-- Continuation lines of multi-line text are indented 6 spaces.
+- Continuation lines of multi-line text are indented under the text: 6 spaces in `show` of a note, 4 in `show` of an addendum or an entry.
 - Each addendum follows the note as a block: a line `addendum <a-id>  <at>  <agent> (<model>)`, optional `  status: <status>`, its entries, then its `resolves:` and `supersedes:` lines.
 
 For an addendum, the first line is `<a-id>  addendum to note <n-id>`. For an entry, the first line is `<e-id>  <type>  in note <n-id>` (with ` via addendum <a-id>` when it came from an addendum), then the entry line.
