@@ -40,3 +40,37 @@ func TestWriteNewForcedReplaceKeepsOwnerOnlyMode(t *testing.T) {
 		t.Fatalf("content %q mode %v", b, fi.Mode().Perm())
 	}
 }
+
+// Replacing a file must never truncate an inode other than the one that was checked.
+func TestWriteNewRefusesHardlinkedFile(t *testing.T) {
+	dir := realTemp(t)
+	victim := filepath.Join(dir, "victim.txt")
+	os.WriteFile(victim, []byte("precious"), 0o600)
+	target := filepath.Join(dir, "out.json")
+	if err := os.Link(victim, target); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeNew(target, "replaced", true); err == nil {
+		t.Fatal("a file with several hard links must not be replaced")
+	}
+	if b, _ := os.ReadFile(victim); string(b) != "precious" {
+		t.Fatalf("the other link was overwritten: %q", b)
+	}
+}
+
+func TestWriteNewRefusesAFileSwappedAfterTheCheck(t *testing.T) {
+	dir := realTemp(t)
+	checked := filepath.Join(dir, "checked.txt")
+	os.WriteFile(checked, []byte("x"), 0o600)
+	swapped := filepath.Join(dir, "out.json")
+	os.WriteFile(swapped, []byte("precious"), 0o600)
+	old := lstat
+	t.Cleanup(func() { lstat = old })
+	lstat = func(string) (os.FileInfo, error) { return os.Lstat(checked) } // the check saw a different file
+	if err := writeNew(swapped, "replaced", true); err == nil {
+		t.Fatal("the opened file is not the one that was checked")
+	}
+	if b, _ := os.ReadFile(swapped); string(b) != "precious" {
+		t.Fatalf("swapped file was truncated: %q", b)
+	}
+}
