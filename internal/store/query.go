@@ -23,13 +23,14 @@ func normAt(at string) (string, error) {
 // text itself is never changed.
 type EntryInfo struct {
 	model.Entry
-	NoteID     string // the note the entry belongs to (the parent note for addendum entries)
-	AddendumID string // set when the entry was written in an addendum
-	Task, Repo string // of the parent note
-	At         string // time of the note or addendum that holds the entry
-	Closed     bool
-	ClosedBy   string // ID of the note or addendum that closes it
-	ClosedAt   string
+	NoteID     string `json:"note_id"`     // the note the entry belongs to (the parent note for addendum entries)
+	AddendumID string `json:"addendum_id"` // set when the entry was written in an addendum
+	Task       string `json:"task"`        // of the parent note
+	Repo       string `json:"repo"`
+	At         string `json:"at"` // time of the note or addendum that holds the entry
+	Closed     bool   `json:"closed"`
+	ClosedBy   string `json:"closed_by"` // ID of the note or addendum that closes it
+	ClosedAt   string `json:"closed_at"`
 }
 
 const entrySelect = `
