@@ -18,6 +18,9 @@ import (
 // maxInput is the largest standard input or import file cairn will read.
 const maxInput = 1 << 20
 
+// maxImport is the largest export file `import` will read: whole projects are bigger than one note.
+const maxImport = 32 << 20
+
 // multi is a repeatable string flag.
 type multi []string
 
@@ -25,13 +28,16 @@ func (m *multi) String() string     { return strings.Join(*m, ",") }
 func (m *multi) Set(v string) error { *m = append(*m, v); return nil }
 
 // readLimited reads at most maxInput bytes and fails when there is more.
-func readLimited(r io.Reader, what string) ([]byte, error) {
-	data, err := io.ReadAll(io.LimitReader(r, maxInput+1))
+func readLimited(r io.Reader, what string) ([]byte, error) { return readLimitedN(r, what, maxInput) }
+
+// readLimitedN is readLimited with an explicit limit.
+func readLimitedN(r io.Reader, what string, limit int64) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(r, limit+1))
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v", what, err)
 	}
-	if len(data) > maxInput {
-		return nil, fmt.Errorf("%s: input too large (max %d bytes)", what, maxInput)
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("%s: input too large (max %d bytes)", what, limit)
 	}
 	return data, nil
 }

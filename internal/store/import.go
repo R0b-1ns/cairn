@@ -17,7 +17,7 @@ type ImportItem struct {
 }
 
 // ImportResult counts what an import did.
-type ImportResult struct{ Inserted, Skipped int }
+type ImportResult struct{ Inserted, Notes, Addenda, Skipped int }
 
 // canon normalizes an item for comparison with what is stored: UTC timestamps
 // and nil-versus-empty lists must not count as differences.
@@ -154,8 +154,10 @@ func (s *Store) Import(items []ImportItem) (ImportResult, error) {
 			}
 			if todo[i].Note != nil {
 				_, err = insertNoteTx(tx, p, *todo[i].Note)
+				res.Notes++
 			} else {
 				_, err = insertAddendumTx(tx, *todo[i].Addendum)
+				res.Addenda++
 			}
 			if err != nil {
 				return ImportResult{}, err
