@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"syscall"
 
 	"github.com/R0b-1ns/cairn/internal/model"
@@ -26,6 +27,9 @@ type Location struct {
 // uidFunc returns the effective user ID; tests replace it.
 var uidFunc = os.Geteuid
 
+// sudoUID returns the invoking user when running under sudo; tests replace it.
+var sudoUID = func() string { return os.Getenv("SUDO_UID") }
+
 // checkTrusted refuses a store entry that another user could have planted or
 // could modify: it must be owned by the current user (root excepted) and must
 // not be world-writable.
@@ -34,8 +38,15 @@ func checkTrusted(path string, fi os.FileInfo) error {
 		return fmt.Errorf("refusing %s: it is world-writable", path)
 	}
 	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
-		if uid := uidFunc(); uid != 0 && int(st.Uid) != uid {
-			return fmt.Errorf("refusing %s: owned by another user (uid %d)", path, st.Uid)
+		uid := uidFunc()
+		owner := int(st.Uid)
+		trusted := owner == uid
+		if uid == 0 && !trusted {
+			// Root, for example under sudo, trusts only the invoking user's stores.
+			trusted = sudoUID() == strconv.Itoa(owner)
+		}
+		if !trusted {
+			return fmt.Errorf("refusing %s: owned by another user (uid %d); run cairn as that user", path, owner)
 		}
 	}
 	return nil
@@ -49,6 +60,11 @@ func CheckStore(root string) (dbPath string, found bool, err error) {
 	fi, err := os.Lstat(dir)
 	if err != nil {
 		return "", false, nil
+	}
+	// Anyone who can write to the project root can swap the store between our
+	// checks and the open, unless the sticky bit protects our entries.
+	if rfi, err := os.Lstat(root); err == nil && rfi.Mode().Perm()&0o002 != 0 && rfi.Mode()&os.ModeSticky == 0 {
+		return "", false, fmt.Errorf("refusing %s: the project folder is world-writable", dir)
 	}
 	if fi.Mode()&os.ModeSymlink != 0 {
 		return "", false, fmt.Errorf("refusing symlinked store folder %s", dir)

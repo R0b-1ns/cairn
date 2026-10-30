@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -24,15 +25,50 @@ func TestRejectsForeignOwnerStore(t *testing.T) {
 	}
 }
 
-func TestRootMayUseAnyOwner(t *testing.T) {
+func TestRootRefusesForeignOwner(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("files here would be root-owned")
+	}
 	base := tempBase(t)
 	stubDB(t, base)
-	orig := uidFunc
-	t.Cleanup(func() { uidFunc = orig })
-	uidFunc = func() int { return 0 }
-	if _, err := Find(base, "", newReg(base)); err != nil {
-		t.Fatalf("root must be accepted: %v", err)
+	setIdentity(t, 0, "")
+	if _, err := Find(base, "", newReg(base)); err == nil || !strings.Contains(err.Error(), "owned by") {
+		t.Fatalf("root must not trust a store owned by someone else, got %v", err)
 	}
+}
+
+func TestRootAcceptsSudoUIDOwner(t *testing.T) {
+	base := tempBase(t)
+	stubDB(t, base)
+	setIdentity(t, 0, strconv.Itoa(os.Geteuid()))
+	if _, err := Find(base, "", newReg(base)); err != nil {
+		t.Fatalf("store owned by SUDO_UID must be accepted: %v", err)
+	}
+}
+
+func TestRejectsWorldWritableRootWithoutSticky(t *testing.T) {
+	base := tempBase(t)
+	stubDB(t, base)
+	if err := os.Chmod(base, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Find(base, "", newReg(base)); err == nil || !strings.Contains(err.Error(), "writable") {
+		t.Fatalf("want world-writable root error, got %v", err)
+	}
+	if err := os.Chmod(base, 0o777|os.ModeSticky); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Find(base, "", newReg(base)); err != nil {
+		t.Fatalf("sticky shared folder must be accepted: %v", err)
+	}
+}
+
+func setIdentity(t *testing.T, uid int, sudo string) {
+	t.Helper()
+	ou, os2 := uidFunc, sudoUID
+	t.Cleanup(func() { uidFunc, sudoUID = ou, os2 })
+	uidFunc = func() int { return uid }
+	sudoUID = func() string { return sudo }
 }
 
 func TestRejectsWorldWritableStore(t *testing.T) {
