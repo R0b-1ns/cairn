@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"syscall"
 
 	"github.com/R0b-1ns/cairn/internal/model"
 	"github.com/R0b-1ns/cairn/internal/store"
@@ -99,27 +100,43 @@ func defineExport(fs *flag.FlagSet) Handler {
 	}
 }
 
-// writeNew writes a 0600 file, refusing to follow symlinks or replace anything but a regular file with --force.
+// lstat is os.Lstat; tests replace it to simulate a swap between check and open.
+var lstat = os.Lstat
+
+// writeNew writes an owner-only file. It never follows a symlink, and replaces
+// an existing file only with --force and only if it is a regular file.
 func writeNew(path, body string, force bool) error {
-	flags := os.O_WRONLY | os.O_CREATE | os.O_EXCL
-	if fi, err := os.Lstat(path); err == nil {
+	flags := os.O_WRONLY | os.O_CREATE | os.O_EXCL | syscall.O_NOFOLLOW
+	var checked os.FileInfo
+	if fi, err := lstat(path); err == nil {
 		if !force {
 			return fmt.Errorf("%s already exists (use --force to replace it)", path)
 		}
 		if !fi.Mode().IsRegular() {
 			return fmt.Errorf("%s is not a regular file; refusing to replace it", path)
 		}
-		flags = os.O_WRONLY | os.O_TRUNC
+		checked = fi
+		flags = os.O_WRONLY | syscall.O_NOFOLLOW // truncate only after the handle is verified
 	}
 	fh, err := os.OpenFile(path, flags, 0o600)
 	if err != nil {
 		return err
 	}
-	if _, err := io.WriteString(fh, body); err != nil {
-		fh.Close()
+	defer fh.Close()
+	if checked != nil {
+		opened, err := fh.Stat()
+		if err != nil || !opened.Mode().IsRegular() {
+			return fmt.Errorf("%s changed while opening; refusing to write", path)
+		}
+		if err := fh.Truncate(0); err != nil {
+			return err
+		}
+	}
+	if err := fh.Chmod(0o600); err != nil {
 		return err
 	}
-	return fh.Close()
+	_, err = io.WriteString(fh, body)
+	return err
 }
 
 func renderMarkdown(s *session, doc exportDoc) (string, error) {
