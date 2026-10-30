@@ -10,7 +10,7 @@ import (
 )
 
 func init() {
-	register(Command{Name: "brief", Summary: "one merged summary of a task: changes, decisions in force, open points", Define: defineBrief})
+	register(Command{Name: "brief", Usage: "<task-id> [flags]", Summary: "one merged summary of a task: changes, decisions in force, open points", Define: defineBrief})
 }
 
 // textWidth is how much of an entry the compact outputs show; `show` prints it all.
@@ -86,8 +86,11 @@ func defineBrief(fs *flag.FlagSet) Handler {
 			}
 		}
 		if f.json {
-			printJSON(c, map[string]any{"task": args[0], "notes": nonNil(headers), "changes": nonNil(changes),
-				"decisions": nonNil(decisions), "open": nonNil(opens)})
+			printJSON(c, map[string]any{"task": args[0],
+				"notes": nonNil(capped(headers, f.max)), "notes_total": len(headers),
+				"changes": nonNil(capped(changes, f.max)), "changes_total": len(changes),
+				"decisions": nonNil(capped(decisions, f.max)), "decisions_total": len(decisions),
+				"open": nonNil(capped(opens, f.max)), "open_total": len(opens)})
 			return ExitOK
 		}
 		if len(headers) == 0 {
@@ -141,4 +144,12 @@ func printSection(c *Ctx, lines []string, max int) {
 		}
 		fmt.Fprintln(c.Stdout, l)
 	}
+}
+
+// capped returns at most n items.
+func capped[T any](v []T, n int) []T {
+	if len(v) > n {
+		return v[:n]
+	}
+	return v
 }

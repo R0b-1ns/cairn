@@ -60,7 +60,7 @@ func TestSearchMaxAndJSON(t *testing.T) {
 	if r := e.run("search", "TP", "--max", "0"); r.code != ExitUsage {
 		t.Fatalf("--max 0: %+v", r)
 	}
-	var hits []struct{ Kind, ID, NoteID, Snippet string }
+	var hits []struct{ Kind, ID, NoteID, Text string }
 	if err := json.Unmarshal([]byte(e.mustRun("search", "tidal", "--json").out), &hits); err != nil || len(hits) == 0 || hits[0].ID == "" {
 		t.Fatalf("json: %v %+v", err, hits)
 	}

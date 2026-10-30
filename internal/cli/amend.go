@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	register(Command{Name: "amend", Summary: "add an addendum to a note (the note itself never changes)", Define: defineAmend})
+	register(Command{Name: "amend", Usage: "<note-id> [flags]", Summary: "add an addendum to a note (the note itself never changes)", Define: defineAmend})
 }
 
 func defineAmend(fs *flag.FlagSet) Handler {

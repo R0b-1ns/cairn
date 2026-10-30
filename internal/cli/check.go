@@ -13,7 +13,7 @@ import (
 )
 
 func init() {
-	register(Command{Name: "check", Summary: "tasks given as done without notes, and old open points", Define: defineCheck})
+	register(Command{Name: "check", Usage: "[flags]", Summary: "tasks given as done without notes, and old open points", Define: defineCheck})
 }
 
 // readDoneFile reads task IDs, one per line; blank lines and # comments are ignored.

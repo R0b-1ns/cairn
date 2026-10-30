@@ -14,9 +14,9 @@ import (
 )
 
 func init() {
-	register(Command{Name: "show", Summary: "print one note, addendum or entry in full", Define: defineShow})
-	register(Command{Name: "list", Summary: "list entries with combinable filters", Define: defineList})
-	register(Command{Name: "recent", Summary: "the last N subjects handled", Define: defineRecent})
+	register(Command{Name: "show", Usage: "<id> [flags]", Summary: "print one note, addendum or entry in full", Define: defineShow})
+	register(Command{Name: "list", Usage: "[flags]", Summary: "list entries with combinable filters", Define: defineList})
+	register(Command{Name: "recent", Usage: "[N] [flags]", Summary: "the last N subjects handled", Define: defineRecent})
 }
 
 // indent prefixes every line of s (already sanitized) so multi-line text stays readable.

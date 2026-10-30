@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	register(Command{Name: "add", Summary: "create a note from flags or JSON on standard input", Define: defineAdd})
+	register(Command{Name: "add", Usage: "[flags]", Summary: "create a note from flags or JSON on standard input", Define: defineAdd})
 }
 
 func defineAdd(fs *flag.FlagSet) Handler {

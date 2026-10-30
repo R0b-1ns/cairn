@@ -148,8 +148,14 @@ type NoteFilter struct{ TaskBase, Task, ID string }
 // NoteHeader is a note without its entries; Status is the current status
 // (latest addendum carrying one, else the note's own).
 type NoteHeader struct {
-	ID, Task, Repo, Agent, Model, At, Title string
-	Status                                  model.Status
+	ID     string       `json:"id"`
+	Task   string       `json:"task"`
+	Repo   string       `json:"repo"`
+	Agent  string       `json:"agent"`
+	Model  string       `json:"model"`
+	At     string       `json:"at"`
+	Title  string       `json:"title"`
+	Status model.Status `json:"status"`
 }
 
 // NoteHeaders returns matching notes oldest first.

@@ -16,12 +16,12 @@ import (
 )
 
 func init() {
-	register(Command{Name: "init", Summary: "create a project (project or machine mode)", Define: defineInit})
-	register(Command{Name: "context", Summary: "print the project name and context", Define: defineContext})
-	register(Command{Name: "projects", Summary: "list every project registered on this machine", Define: defineProjects})
-	register(Command{Name: "project move", Summary: "update the path of a registered project", Define: defineProjectMove})
-	register(Command{Name: "project add", Summary: "register a project-mode database that came from elsewhere", Define: defineProjectAdd})
-	register(Command{Name: "project remove", Summary: "unregister a project (never deletes its database)", Define: defineProjectRemove})
+	register(Command{Name: "init", Usage: "--name NAME --repos a,b [flags]", Summary: "create a project (project or machine mode)", Define: defineInit})
+	register(Command{Name: "context", Usage: "[flags]", Summary: "print the project name and context", Define: defineContext})
+	register(Command{Name: "projects", Usage: "[flags]", Summary: "list every project registered on this machine", Define: defineProjects})
+	register(Command{Name: "project move", Usage: "<name> <new-path>", Summary: "update the path of a registered project", Define: defineProjectMove})
+	register(Command{Name: "project add", Usage: "<path>", Summary: "register a project-mode database that came from elsewhere", Define: defineProjectAdd})
+	register(Command{Name: "project remove", Usage: "<name>", Summary: "unregister a project (never deletes its database)", Define: defineProjectRemove})
 }
 
 func defineInit(fs *flag.FlagSet) Handler {
@@ -229,8 +229,21 @@ func defineProjectMove(fs *flag.FlagSet) Handler {
 			return fail(c, ExitRuntime, "%s is not an existing folder", np)
 		}
 		if entry.Mode == model.ModeProject {
-			if _, found, err := locate.CheckStore(np); err != nil || !found {
+			db, found, err := locate.CheckStore(np)
+			if err != nil || !found {
 				return fail(c, ExitRuntime, "no .cairn/cairn.db at %s", np)
+			}
+			st, err := store.Open(db)
+			if err != nil {
+				return fail(c, ExitRuntime, "%v", err)
+			}
+			p, err := st.Project()
+			st.Close()
+			if err != nil {
+				return fail(c, ExitRuntime, "%v", err)
+			}
+			if p.Name != args[0] {
+				return fail(c, ExitRuntime, "the database at %s belongs to project %q, not %q", np, p.Name, args[0])
 			}
 		}
 		if err := reg.Move(args[0], np); err != nil {

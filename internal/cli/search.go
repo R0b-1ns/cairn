@@ -7,7 +7,7 @@ import (
 )
 
 func init() {
-	register(Command{Name: "search", Summary: "full-text search over note titles and entries", Define: defineSearch})
+	register(Command{Name: "search", Usage: "[flags] [--] <terms...>", Summary: "full-text search over note titles and entries", Define: defineSearch})
 }
 
 func defineSearch(fs *flag.FlagSet) Handler {
@@ -50,7 +50,7 @@ func defineSearch(fs *flag.FlagSet) Handler {
 			if h.AddendumID != "" {
 				loc += " via " + h.AddendumID
 			}
-			fmt.Fprintf(c.Stdout, "%s  %-8s %s  (%s)\n", h.ID, kind, clip(sanitize(h.Snippet), textWidth), loc)
+			fmt.Fprintf(c.Stdout, "%s  %-8s %s  (%s)\n", h.ID, kind, clip(sanitize(h.Text), textWidth), loc)
 		}
 		if total > len(hits) {
 			fmt.Fprintf(c.Stdout, "... %d more (raise --max)\n", total-len(hits))

@@ -16,8 +16,8 @@ import (
 )
 
 func init() {
-	register(Command{Name: "export", Summary: "write notes as Markdown (to read) or JSON (to import)", Define: defineExport})
-	register(Command{Name: "import", Summary: "import a JSON export, validated and without ever changing existing data", Define: defineImport})
+	register(Command{Name: "export", Usage: "[flags]", Summary: "write notes as Markdown (to read) or JSON (to import)", Define: defineExport})
+	register(Command{Name: "import", Usage: "<file|-> [flags]", Summary: "import a JSON export, validated and without ever changing existing data", Define: defineImport})
 }
 
 const (
@@ -199,6 +199,12 @@ func renderMarkdown(s *session, doc exportDoc) (string, error) {
 				ts = append(ts, string(t))
 			}
 			fmt.Fprintf(&b, "none: %s\n\n", strings.Join(ts, ", "))
+		}
+		if len(n.Resolves) > 0 {
+			fmt.Fprintf(&b, "resolves: %s\n\n", strings.Join(n.Resolves, ", "))
+		}
+		if len(n.Supersedes) > 0 {
+			fmt.Fprintf(&b, "supersedes: %s\n\n", strings.Join(n.Supersedes, ", "))
 		}
 		if len(n.Impacts) > 0 {
 			fmt.Fprintf(&b, "impacts: %s\n\n", sanitize(strings.Join(n.Impacts, ", ")))

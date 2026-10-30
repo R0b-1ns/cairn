@@ -40,6 +40,7 @@ type Handler func(c *Ctx, args []string) int
 // and documentation checks can list every flag.
 type Command struct {
 	Name    string // may contain one space for sub-commands, e.g. "project move"
+	Usage   string // arguments, shown after the name in --help, e.g. "<note-id> [flags]"
 	Summary string
 	Define  func(fs *flag.FlagSet) Handler
 }
@@ -58,8 +59,18 @@ func Commands() []Command {
 // Run executes cairn and returns the process exit code.
 func Run(args []string, stdin io.Reader, stdout, stderr io.Writer, getenv func(string) string) int {
 	c := &Ctx{Stdin: stdin, Stdout: safeWriter{stdout}, Stderr: safeWriter{stderr}, Getenv: getenv}
-	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
+	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" || (args[0] == "help" && len(args) == 1) {
 		usage(c)
+		return ExitOK
+	}
+	if args[0] == "help" {
+		cmd, _ := find(args[1:])
+		if cmd == nil {
+			return fail(c, ExitUsage, "no help for %q (run 'cairn --help')", strings.Join(args[1:], " "))
+		}
+		fs := flag.NewFlagSet(cmd.Name, flag.ContinueOnError)
+		cmd.Define(fs)
+		commandHelp(c, cmd, fs)
 		return ExitOK
 	}
 	if args[0] == "--version" || args[0] == "version" {
@@ -68,6 +79,16 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer, getenv func(s
 	}
 	cmd, rest := find(args)
 	if cmd == nil {
+		var subs []string
+		for _, k := range Commands() {
+			if strings.HasPrefix(k.Name, args[0]+" ") {
+				subs = append(subs, "  cairn "+k.Name+"  "+k.Summary)
+			}
+		}
+		if len(subs) > 0 {
+			fmt.Fprintf(c.Stderr, "cairn: %q needs a sub-command:\n%s\n", args[0], strings.Join(subs, "\n"))
+			return ExitUsage
+		}
 		fmt.Fprintf(c.Stderr, "cairn: unknown command %q (run 'cairn --help')\n", args[0])
 		return ExitUsage
 	}
@@ -111,12 +132,14 @@ func parseInterleaved(fs *flag.FlagSet, args []string) ([]string, error) {
 		if err := fs.Parse(args); err != nil {
 			return nil, err
 		}
-		args = fs.Args()
+		rest := fs.Args()
+		// The flag package consumes a literal "--"; everything after it is positional.
+		if consumed := len(args) - len(rest); consumed > 0 && args[consumed-1] == "--" {
+			return append(pos, rest...), nil
+		}
+		args = rest
 		if len(args) == 0 {
 			return pos, nil
-		}
-		if args[0] == "--" {
-			return append(pos, args[1:]...), nil
 		}
 		pos = append(pos, args[0])
 		args = args[1:]
@@ -133,10 +156,24 @@ func usage(c *Ctx) {
 }
 
 func commandHelp(c *Ctx, cmd *Command, fs *flag.FlagSet) {
-	fmt.Fprintf(c.Stdout, "cairn %s: %s\n\nFlags:\n", cmd.Name, cmd.Summary)
-	fs.SetOutput(c.Stdout)
-	fs.PrintDefaults()
-	fs.SetOutput(io.Discard)
+	fmt.Fprintf(c.Stdout, "Usage: cairn %s", cmd.Name)
+	if cmd.Usage != "" {
+		fmt.Fprintf(c.Stdout, " %s", cmd.Usage)
+	}
+	fmt.Fprintf(c.Stdout, "\n\n%s\n", cmd.Summary)
+	n := 0
+	fs.VisitAll(func(f *flag.Flag) {
+		if n == 0 {
+			fmt.Fprintln(c.Stdout, "\nFlags:")
+		}
+		n++
+		typ, usage := flag.UnquoteUsage(f)
+		fmt.Fprintf(c.Stdout, "  --%s %s\n      %s", f.Name, typ, usage)
+		if f.DefValue != "" && f.DefValue != "false" {
+			fmt.Fprintf(c.Stdout, " (default %q)", f.DefValue)
+		}
+		fmt.Fprintln(c.Stdout)
+	})
 }
 
 func osGetenv(k string) string { return os.Getenv(k) }

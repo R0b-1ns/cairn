@@ -8,7 +8,7 @@ import (
 )
 
 func init() {
-	register(Command{Name: "guide", Summary: "print the one-page usage guide for agents", Define: func(fs *flag.FlagSet) Handler {
+	register(Command{Name: "guide", Usage: "", Summary: "print the one-page usage guide for agents", Define: func(fs *flag.FlagSet) Handler {
 		return func(c *Ctx, args []string) int {
 			if len(args) != 0 {
 				return fail(c, ExitUsage, "guide takes no arguments")
