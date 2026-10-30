@@ -98,3 +98,46 @@ func TestUnregisteredStoreIsAnnounced(t *testing.T) {
 		t.Fatalf("a registered project must stay quiet: %+v", r)
 	}
 }
+
+// Files written by export bypass the terminal filter, so they are cleaned themselves.
+func TestExportFilesNeverCarryControlBytes(t *testing.T) {
+	e := newEnv(t)
+	e.initProject()
+	db, err := sql.Open("sqlite", filepath.Join(e.root, ".cairn", "cairn.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	esc := "\x1b[31m\x1b]0;pwned\x07\u009b2J"
+	for _, q := range []struct {
+		sql  string
+		args []any
+	}{
+		{`INSERT INTO notes(id,agent,repo,at,task,task_base,task_ext,model,title,status,none,impacts,commits)
+			VALUES ('n-aaaaaa',?,?,?,?,'TP-03','',?,?,'done','[]','[]','[]')`, []any{"ag" + esc, "re" + esc, "2026-01-01T00:00:00Z", "TP-03" + esc, "mo" + esc, "ti" + esc}},
+		{`INSERT INTO entries(id,note_id,pos,type,text,decided_by) VALUES ('e-aaaaaa','n-aaaaaa',0,'decision',?,?)`, []any{"tx" + esc, "by" + esc}},
+		{`INSERT INTO addenda(id,note_id,agent,model,at,status) VALUES ('a-aaaaaa','n-aaaaaa',?,?,'2026-01-02T00:00:00Z','done')`, []any{"ag" + esc, "mo" + esc}},
+		{`INSERT INTO entries(id,addendum_id,pos,type,text,decided_by) VALUES ('e-bbbbbb','a-aaaaaa',0,'note',?,'')`, []any{"tx" + esc}},
+		{`INSERT INTO links(kind,target_entry_id,source_addendum_id) VALUES ('supersedes','e-aaaaaa','a-aaaaaa')`, nil},
+	} {
+		if _, err := db.Exec(q.sql, q.args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db.Close()
+	dir := realTemp(t)
+	for _, format := range []string{"md", "json"} {
+		path := filepath.Join(dir, "out."+format)
+		if r := e.run("export", "--format", format, "--out", path); r.code != ExitOK {
+			t.Fatalf("export %s: %+v", format, r)
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range string(b) {
+			if r != '\n' && r != '\t' && (r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f)) {
+				t.Fatalf("%s export contains control character %U", format, r)
+			}
+		}
+	}
+}

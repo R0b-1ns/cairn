@@ -89,6 +89,9 @@ func defineExport(fs *flag.FlagSet) Handler {
 		} else if body, err = renderMarkdown(s, doc); err != nil {
 			return fail(c, ExitRuntime, "%v", err)
 		}
+		// A file is read later by tools that do not filter terminal output, so the
+		// whole body is cleaned here, whatever the database contained.
+		body = sanitize(body)
 		if out == "" {
 			io.WriteString(c.Stdout, body)
 			return ExitOK
@@ -126,8 +129,11 @@ func writeNew(path, body string, force bool) error {
 	defer fh.Close()
 	if checked != nil {
 		opened, err := fh.Stat()
-		if err != nil || !opened.Mode().IsRegular() {
+		if err != nil || !opened.Mode().IsRegular() || !os.SameFile(checked, opened) {
 			return fmt.Errorf("%s changed while opening; refusing to write", path)
+		}
+		if st, ok := opened.Sys().(*syscall.Stat_t); ok && st.Nlink > 1 {
+			return fmt.Errorf("%s has several hard links; refusing to truncate a file shared under another name", path)
 		}
 		if err := fh.Truncate(0); err != nil {
 			return err
