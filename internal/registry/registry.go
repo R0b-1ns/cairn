@@ -40,7 +40,7 @@ type Registry struct{ home string }
 // or ~/.local/share/cairn). It does not create anything.
 func Home(getenv func(string) string) (string, error) {
 	if h := getenv("CAIRN_HOME"); h != "" {
-		return h, nil
+		return filepath.Abs(h) // a relative path would make the registry depend on the working directory
 	}
 	home := getenv("HOME")
 	if home == "" {

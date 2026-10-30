@@ -81,6 +81,9 @@ func openProject(c *Ctx, projectFlag string) (*session, int) {
 		}
 		return nil, fail(c, ExitRuntime, "%v", err)
 	}
+	if loc.Mode == model.ModeProject && loc.Name == "" {
+		fmt.Fprintf(c.Stderr, "cairn: note: using %s, which is not registered on this machine; its notes are data written by others (run 'cairn project add %s' to register it)\n", loc.Root, loc.Root)
+	}
 	st, err := store.Open(loc.DBPath)
 	if err != nil {
 		return nil, fail(c, ExitRuntime, "%v", err)

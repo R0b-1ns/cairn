@@ -451,3 +451,52 @@ func TestTaskParts(t *testing.T) {
 		t.Error(`TaskParts("nope") ok = true, want false`)
 	}
 }
+
+// Invisible and direction-changing characters can hide or reorder text; they are refused.
+func TestRejectsInvisibleAndBidiCharacters(t *testing.T) {
+	for _, s := range []string{"a\u202eb", "a\u200bb", "a\u2066b", "a\ufeffb", "a\U000e0049b", "a\u2060b", "a\u200fb"} {
+		if err := Text("f", s, 100, true); err == nil {
+			t.Errorf("Text(%q) accepted, want rejection", s)
+		}
+	}
+	for _, s := range []string{"é漢字", "emoji 🙂", "naïve café"} {
+		if err := Text("f", s, 100, true); err != nil {
+			t.Errorf("Text(%q) rejected: %v", s, err)
+		}
+	}
+}
+
+func TestEmptyNoteRefused(t *testing.T) {
+	n := validNote()
+	n.Entries = nil
+	n.None = []model.EntryType{model.TypeChange, model.TypeDecision, model.TypeOpen, model.TypeNote, model.TypeHelper}
+	if !hasField(Note(n, tidepool(), Options{}), "entries") {
+		t.Fatal("a note with no entry at all must be refused")
+	}
+}
+
+func TestTaskPartsRequiresFullMatchAndBase(t *testing.T) {
+	p := tidepool()
+	p.TaskPattern = `(?P<base>[A-Z]+-\d+)`
+	if _, _, ok := TaskParts(p, "xx TP-03 yy"); ok {
+		t.Error("unanchored pattern must still match the whole ID")
+	}
+	if _, _, ok := TaskParts(p, "TP-03"); !ok {
+		t.Error("full match must work")
+	}
+	p.TaskPattern = `^(?P<base>[A-Z]*)-?(?P<ext>\d*)$`
+	if _, _, ok := TaskParts(p, "-"); ok {
+		t.Error("an empty base must be refused")
+	}
+}
+
+func TestCommitErrorDoesNotEchoValue(t *testing.T) {
+	n := validNote()
+	secret := "ghp_" + "abcdefghijklmnopqrstuvwxyz0123456789"
+	n.Commits = []string{secret}
+	for _, e := range Note(n, tidepool(), Options{}) {
+		if strings.Contains(e.Message, secret) {
+			t.Fatalf("error echoes the value: %v", e)
+		}
+	}
+}

@@ -3,6 +3,7 @@ package cli
 import (
 	"io"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -18,8 +19,8 @@ func sanitize(s string) string {
 			i = skipEscape(rs, i)
 		case r == '\n' || r == '\t':
 			b.WriteRune(r)
-		case r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) || r == 0x2028 || r == 0x2029:
-			// dropped
+		case r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) || r == 0x2028 || r == 0x2029 || (unicode.Is(unicode.Cf, r) && r != 0x200d):
+			// dropped: control, invisible and direction-changing characters
 		default:
 			b.WriteRune(r)
 		}

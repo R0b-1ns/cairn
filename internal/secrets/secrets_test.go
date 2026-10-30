@@ -84,3 +84,32 @@ func TestWarningDoesNotEchoSecret(t *testing.T) {
 		}
 	}
 }
+
+func TestDetectsPrefixedAndUrlCredentials(t *testing.T) {
+	cases := map[string]string{
+		"credential-assignment": "DB_" + "PASSWORD=hunter2hunter2",
+	}
+	for rule, v := range cases {
+		if !hasRule(Scan(map[string]string{"f": v}), rule) {
+			t.Errorf("%q not detected as %s", v, rule)
+		}
+	}
+	for _, v := range []string{"GITHUB_" + "TOKEN: abcdef123456", "AWS_SECRET_" + "ACCESS_KEY=abcdefgh12345678", "export API_" + "KEY=abcdefgh12345678"} {
+		if !hasRule(Scan(map[string]string{"f": v}), "credential-assignment") {
+			t.Errorf("%q not detected", v)
+		}
+	}
+	if !hasRule(Scan(map[string]string{"f": "postgres://user:" + "s3cretpw@db.example.com/x"}), "url-credentials") {
+		t.Error("URL credentials not detected")
+	}
+	for _, v := range []string{"sk-ant-" + "api03-abcdefghijklmnopqrstuvwx", "sk_live_" + "abcdefghijklmnopqrstuvwx"} {
+		if !hasRule(Scan(map[string]string{"f": v}), "api-key") {
+			t.Errorf("%q not detected as api-key", v)
+		}
+	}
+	for _, v := range []string{"the token bucket resets", "https://example.com/path", "user@example.com", "mailto:a@b.c"} {
+		if fs := Scan(map[string]string{"f": v}); len(fs) != 0 {
+			t.Errorf("%q wrongly flagged: %v", v, fs)
+		}
+	}
+}

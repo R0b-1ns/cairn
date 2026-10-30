@@ -426,3 +426,15 @@ func TestMachineDBPath(t *testing.T) {
 		t.Errorf("MachineDBPath(tidepool) = %q, want %q", got, want)
 	}
 }
+
+func TestHomeIsAbsolute(t *testing.T) {
+	got, err := Home(func(k string) string {
+		if k == "CAIRN_HOME" {
+			return "relative/dir"
+		}
+		return ""
+	})
+	if err != nil || !filepath.IsAbs(got) {
+		t.Fatalf("relative CAIRN_HOME must become absolute: %q %v", got, err)
+	}
+}

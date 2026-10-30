@@ -42,3 +42,11 @@ func TestClip(t *testing.T) {
 		}
 	}
 }
+
+func TestSanitizeMakesInvisibleCharactersVisible(t *testing.T) {
+	for _, in := range []string{"a\u202eb", "a\u200bb", "a\U000e0049b", "a\ufeffb"} {
+		if out := sanitize(in); out != "ab" {
+			t.Errorf("sanitize(%q) = %q, want the invisible character removed", in, out)
+		}
+	}
+}

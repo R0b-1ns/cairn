@@ -2,6 +2,7 @@ package cli
 
 import (
 	"database/sql"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -60,5 +61,40 @@ func TestHostileDatabaseNeverReachesTerminal(t *testing.T) {
 		if strings.Contains(r.err, "panic") {
 			t.Fatalf("cairn %v panicked: %s", args, r.err)
 		}
+	}
+}
+
+func TestImportRefusesFutureTimestamps(t *testing.T) {
+	a, _ := newBriefFixture(t)
+	doc := a.mustRun("export", "--format", "json").out
+	forged := strings.Replace(doc, `"at": "2026-10-30T10:00:00Z"`, `"at": "9999-12-31T23:59:59Z"`, 1)
+	b := secondProject(t)
+	r := b.runIn(b.root, forged, "import", "-")
+	if r.code != ExitValidation || !strings.Contains(r.err, "notes[0].at") || countNotes(t, b) != 0 {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestMachineDatabaseMissingIsNoProject(t *testing.T) {
+	e := newEnv(t)
+	e.initProject("--mode", "machine")
+	os.Remove(filepath.Join(e.home, "projects", "tidepool", "cairn.db"))
+	if r := e.run("context"); r.code != ExitNoProject || strings.Contains(r.err, "lstat") {
+		t.Fatalf("want a clear exit 4, got %+v", r)
+	}
+}
+
+func TestUnregisteredStoreIsAnnounced(t *testing.T) {
+	e := newEnv(t)
+	e.initProject()
+	clone := realTemp(t)
+	copyDir(t, filepath.Join(e.root, ".cairn"), filepath.Join(clone, ".cairn"))
+	other := newEnv(t) // a machine that never registered this clone
+	r := other.runIn(clone, "", "context")
+	if r.code != ExitOK || !strings.Contains(r.err, "not registered") {
+		t.Fatalf("want a stderr notice about the unregistered store: %+v", r)
+	}
+	if r := e.run("context"); strings.Contains(r.err, "not registered") {
+		t.Fatalf("a registered project must stay quiet: %+v", r)
 	}
 }

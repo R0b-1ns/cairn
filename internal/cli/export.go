@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/R0b-1ns/cairn/internal/model"
 	"github.com/R0b-1ns/cairn/internal/store"
@@ -282,10 +283,19 @@ func defineImport(fs *flag.FlagSet) Handler {
 		}
 		var items []store.ImportItem
 		opt := validate.Options{AllowUnknownModel: true}
+		// An import must not carry timestamps from the future: they would pin a
+		// note's status and ordering ahead of everything written later.
+		latest := now().Add(time.Hour)
+		notFuture := func(p, at string) {
+			if t, err := time.Parse(time.RFC3339, at); err == nil && t.After(latest) {
+				errs = append(errs, validate.FieldError{Field: p + ".at", Message: "is in the future"})
+			}
+		}
 		for i := range doc.Notes {
 			n := &doc.Notes[i]
 			p := fmt.Sprintf("notes[%d]", i)
 			needID(p, n.ID, n.Entries)
+			notFuture(p, n.At)
 			prefix(p, validate.Note(*n, s.Proj, opt))
 			n.Title = crlf(n.Title)
 			items = append(items, store.ImportItem{Note: n})
@@ -295,6 +305,7 @@ func defineImport(fs *flag.FlagSet) Handler {
 			a := &doc.Addenda[i]
 			p := fmt.Sprintf("addenda[%d]", i)
 			needID(p, a.ID, a.Entries)
+			notFuture(p, a.At)
 			prefix(p, validate.Addendum(*a, opt))
 			items = append(items, store.ImportItem{Addendum: a})
 			warnSecrets(c, prefixed(p, entryFields("", a.Entries)))

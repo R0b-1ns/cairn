@@ -112,7 +112,11 @@ func fromEntry(reg *registry.Registry, e registry.Entry) (Location, error) {
 		}
 		return Location{Name: e.Name, Mode: e.Mode, Root: e.Path, DBPath: db}, nil
 	}
-	return Location{Name: e.Name, Mode: e.Mode, Root: e.Path, DBPath: reg.MachineDBPath(e.Name)}, nil
+	db := reg.MachineDBPath(e.Name)
+	if _, err := os.Lstat(db); err != nil {
+		return Location{}, fmt.Errorf("%w: the database of machine project %q is missing (%s)", ErrNoProject, e.Name, db)
+	}
+	return Location{Name: e.Name, Mode: e.Mode, Root: e.Path, DBPath: db}, nil
 }
 
 // Find locates the project for cwd. A non-empty name (from --project or

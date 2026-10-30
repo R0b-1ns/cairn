@@ -19,7 +19,9 @@ var rules = []struct {
 	{"github-token", regexp.MustCompile(`\bgh[pousr]_[A-Za-z0-9]{36,}\b|\bgithub_pat_[A-Za-z0-9_]{22,}\b`)},
 	{"slack-token", regexp.MustCompile(`\bxox[abprs]-[A-Za-z0-9-]{10,}`)},
 	{"jwt", regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}`)},
-	{"credential-assignment", regexp.MustCompile(`(?i)\b(?:password|passwd|secret|token|api[_-]?key)\b["']?\s*[:=]\s*["']?[^\s"']{8,}`)},
+	{"credential-assignment", regexp.MustCompile(`(?i)(?:^|[^a-z0-9])(?:[a-z0-9]+[_-])*(?:password|passwd|secret|token|api[_-]?key)(?:[_-][a-z0-9]+)*["']?\s*[:=]\s*["']?[^\s"']{8,}`)},
+	{"url-credentials", regexp.MustCompile(`(?i)[a-z][a-z0-9+.-]*://[^\s/:@]+:[^\s/@]{3,}@`)},
+	{"api-key", regexp.MustCompile(`\b(?:sk-ant-|sk_live_|sk_test_)[A-Za-z0-9_-]{16,}|\bsk-[A-Za-z0-9]{32,}`)},
 }
 
 // Scan checks each field value and returns findings sorted by field then rule.

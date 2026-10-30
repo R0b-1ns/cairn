@@ -4,6 +4,7 @@ package validate
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -52,8 +53,13 @@ func Text(field, s string, max int, multiline bool) *FieldError {
 		if multiline && (r == '\n' || r == '\t') {
 			continue
 		}
-		if unicode.IsControl(r) || r == ' ' || r == ' ' {
+		if unicode.IsControl(r) || r == '\u2028' || r == '\u2029' {
 			return &FieldError{field, "contains a control character"}
+		}
+		// Invisible and direction-changing characters (bidi marks, zero-width
+		// spaces, tag characters) can hide or reorder text; ZWJ is kept for emoji.
+		if unicode.Is(unicode.Cf, r) && r != '\u200d' {
+			return &FieldError{field, "contains an invisible or direction-changing character"}
 		}
 	}
 	return nil
@@ -86,7 +92,7 @@ func (c *collector) idList(field string, kind byte, list []string) {
 	}
 	for _, id := range list {
 		if !ids.Valid(kind, id) {
-			c.addf(field, "%q is not a valid entry ID", id)
+			c.addf(field, "%s is not a valid entry ID", quote(id))
 		}
 	}
 }
@@ -112,10 +118,10 @@ func (c *collector) entries(entries []model.Entry) {
 	for i, e := range entries {
 		f := fmt.Sprintf("entries[%d]", i)
 		if e.ID != "" && !ids.Valid('e', e.ID) {
-			c.addf(f+".id", "%q is not a valid entry ID", e.ID)
+			c.addf(f+".id", "%s is not a valid entry ID", quote(e.ID))
 		}
 		if !validType(e.Type) {
-			c.addf(f+".type", "%q is not one of change, decision, open, note, helper", e.Type)
+			c.addf(f+".type", "%s is not one of change, decision, open, note, helper", quote(string(e.Type)))
 		}
 		switch strings.ToLower(strings.TrimSpace(e.Text)) {
 		case "":
@@ -152,7 +158,7 @@ func (c *collector) actor(a, m string, o Options) {
 func Note(n model.Note, p model.Project, o Options) []FieldError {
 	var c collector
 	if n.ID != "" && !ids.Valid('n', n.ID) {
-		c.addf("id", "%q is not a valid note ID", n.ID)
+		c.addf("id", "%s is not a valid note ID", quote(n.ID))
 	}
 	c.actor(n.Agent, n.Model, o)
 	c.line("title", n.Title, MaxTitle)
@@ -161,13 +167,13 @@ func Note(n model.Note, p model.Project, o Options) []FieldError {
 		c.addf("status", "must be done, in_progress or blocked")
 	}
 	if !contains(p.Repos, n.Repo) {
-		c.addf("repo", "%q is not an allowed repo (allowed: %s)", n.Repo, strings.Join(p.Repos, ", "))
+		c.addf("repo", "%s is not an allowed repo (allowed: %s)", quote(n.Repo), strings.Join(p.Repos, ", "))
 	}
 	if n.Task != "" {
 		if err := Text("task", n.Task, MaxLine, false); err != nil {
 			c.add(err)
 		} else if _, _, ok := TaskParts(p, n.Task); !ok {
-			c.addf("task", "%q does not match the project task pattern %s", n.Task, p.TaskPattern)
+			c.addf("task", "%s does not match the project task pattern %s", quote(n.Task), p.TaskPattern)
 		}
 	}
 	if len(n.Impacts) > MaxListItems {
@@ -175,7 +181,7 @@ func Note(n model.Note, p model.Project, o Options) []FieldError {
 	}
 	for _, r := range n.Impacts {
 		if !contains(p.Repos, r) {
-			c.addf("impacts", "%q is not an allowed repo", r)
+			c.addf("impacts", "%s is not an allowed repo", quote(r))
 		}
 	}
 	if len(n.Commits) > MaxListItems {
@@ -183,12 +189,15 @@ func Note(n model.Note, p model.Project, o Options) []FieldError {
 	}
 	for _, h := range n.Commits {
 		if !commitRe.MatchString(h) {
-			c.addf("commits", "%q is not a lowercase hex commit hash (7-64 characters)", h)
+			c.addf("commits", "entry is not a lowercase hex commit hash (7-64 characters)")
 		}
 	}
 	c.idList("resolves", 'e', n.Resolves)
 	c.idList("supersedes", 'e', n.Supersedes)
 	c.entries(n.Entries)
+	if len(n.Entries) == 0 {
+		c.addf("entries", "a note needs at least one entry")
+	}
 	c.sections(n)
 	return c
 }
@@ -202,7 +211,7 @@ func (c *collector) sections(n model.Note) {
 	none := map[model.EntryType]bool{}
 	for _, t := range n.None {
 		if !validType(t) {
-			c.addf("none", "%q is not an entry type", t)
+			c.addf("none", "%s is not an entry type", quote(string(t)))
 			continue
 		}
 		none[t] = true
@@ -221,10 +230,10 @@ func (c *collector) sections(n model.Note) {
 func Addendum(a model.Addendum, o Options) []FieldError {
 	var c collector
 	if a.ID != "" && !ids.Valid('a', a.ID) {
-		c.addf("id", "%q is not a valid addendum ID", a.ID)
+		c.addf("id", "%s is not a valid addendum ID", quote(a.ID))
 	}
 	if !ids.Valid('n', a.NoteID) {
-		c.addf("note_id", "%q is not a valid note ID", a.NoteID)
+		c.addf("note_id", "%s is not a valid note ID", quote(a.NoteID))
 	}
 	c.actor(a.Agent, a.Model, o)
 	c.timestamp(a.At)
@@ -258,7 +267,7 @@ func Project(p model.Project) []FieldError {
 	}
 	for _, r := range p.Repos {
 		if !repoRe.MatchString(r) {
-			c.addf("repos", "%q must match %s", r, repoRe)
+			c.addf("repos", "%s must match %s", quote(r), repoRe)
 		}
 	}
 	if len(p.TaskPattern) > MaxPatternLen {
@@ -280,11 +289,15 @@ func TaskParts(p model.Project, id string) (base, ext string, ok bool) {
 	if err != nil || re.SubexpIndex("base") < 0 {
 		return "", "", false
 	}
+	loc := re.FindStringSubmatchIndex(id)
+	if loc == nil || loc[0] != 0 || loc[1] != len(id) {
+		return "", "", false // the pattern must cover the whole ID, anchored or not
+	}
 	m := re.FindStringSubmatch(id)
-	if m == nil {
+	base = m[re.SubexpIndex("base")]
+	if base == "" {
 		return "", "", false
 	}
-	base = m[re.SubexpIndex("base")]
 	if i := re.SubexpIndex("ext"); i >= 0 {
 		ext = m[i]
 	}
@@ -303,3 +316,13 @@ func contains(list []string, s string) bool {
 // ValidName reports whether s is an acceptable project name. Names become folder
 // names in the data directory, so path separators and dots are impossible.
 func ValidName(s string) bool { return nameRe.MatchString(s) }
+
+// quote shows a user-supplied value in an error message, shortened so that a
+// secret pasted into the wrong field is not repeated in full.
+func quote(v string) string {
+	r := []rune(v)
+	if len(r) > 24 {
+		return strconv.Quote(string(r[:24])) + "…"
+	}
+	return strconv.Quote(v)
+}
