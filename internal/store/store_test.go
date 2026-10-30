@@ -351,3 +351,38 @@ func TestAddendumUnknownNote(t *testing.T) {
 		t.Fatalf("want ErrNotFound, got %v", err)
 	}
 }
+
+// INSERT OR REPLACE deletes the old row without firing DELETE triggers, so it
+// must be refused by its own trigger on every content table.
+func TestReplaceCannotRewriteHistory(t *testing.T) {
+	s, path := newStore(t)
+	n, _ := s.InsertNote(sampleNote())
+	open, _ := entryIDs(n)
+	addAddendum(t, s, model.Addendum{NoteID: n.ID, At: "2026-10-30T11:00:00Z", Resolves: []string{open}})
+	db := rawDB(t, path)
+	stmts := map[string]string{
+		"project":             "INSERT OR REPLACE INTO project SELECT id,'hijacked',mode,context,repos,task_pattern FROM project",
+		"notes":               "INSERT OR REPLACE INTO notes SELECT id,agent,repo,at,task,task_base,task_ext,model,'REWRITTEN',status,none,impacts,commits FROM notes",
+		"entries":             "INSERT OR REPLACE INTO entries SELECT id,note_id,addendum_id,pos,type,'REWRITTEN',decided_by FROM entries",
+		"addenda":             "INSERT OR REPLACE INTO addenda SELECT id,note_id,'REWRITTEN',model,at,status FROM addenda",
+		"links":               "INSERT OR REPLACE INTO links SELECT seq,kind,target_entry_id,source_note_id,source_addendum_id FROM links",
+		"links by unique key": "REPLACE INTO links(kind,target_entry_id,source_note_id) SELECT kind,target_entry_id,source_addendum_id IS NULL OR 1 FROM links",
+	}
+	for name, stmt := range stmts {
+		if _, err := db.Exec(stmt); err == nil || !strings.Contains(err.Error(), "immutable") {
+			t.Errorf("%s: REPLACE not rejected: %v", name, err)
+		}
+	}
+	var title, agent, project string
+	db.QueryRow("SELECT title FROM notes").Scan(&title)
+	db.QueryRow("SELECT agent FROM addenda").Scan(&agent)
+	db.QueryRow("SELECT name FROM project").Scan(&project)
+	if title != "Add tidal index" || agent != "builder" || project != "tidepool" {
+		t.Fatalf("history was rewritten: %q %q %q", title, agent, project)
+	}
+	var links int
+	db.QueryRow("SELECT COUNT(*) FROM links").Scan(&links)
+	if links != 1 {
+		t.Fatalf("links = %d", links)
+	}
+}

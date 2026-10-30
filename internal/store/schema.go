@@ -6,7 +6,7 @@ import (
 )
 
 // SchemaVersion is stored in PRAGMA user_version.
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 // contentTables are the tables protected by immutability triggers.
 var contentTables = []string{"project", "notes", "entries", "addenda", "links"}
@@ -69,6 +69,17 @@ CREATE INDEX addenda_note ON addenda(note_id);
 CREATE VIRTUAL TABLE search USING fts5(text, kind UNINDEXED, id UNINDEXED, note_id UNINDEXED);
 `
 
+// replaceGuards is, per content table, the condition that an INSERT would replace
+// an existing row. INSERT OR REPLACE deletes the old row without firing DELETE
+// triggers, so it needs a trigger of its own.
+var replaceGuards = map[string]string{
+	"project": "id = NEW.id",
+	"notes":   "id = NEW.id",
+	"entries": "id = NEW.id",
+	"addenda": "id = NEW.id",
+	"links":   "seq = NEW.seq OR (target_entry_id = NEW.target_entry_id AND kind = NEW.kind)",
+}
+
 // triggerSQL returns the name -> CREATE TRIGGER statement for every immutability trigger.
 func triggerSQL() map[string]string {
 	out := map[string]string{}
@@ -78,6 +89,10 @@ func triggerSQL() map[string]string {
 			out[name] = "CREATE TRIGGER " + name + " BEFORE " + strings.ToUpper(op) + " ON " + t +
 				" BEGIN SELECT RAISE(ABORT, 'immutable: " + t + " rows cannot be modified or deleted'); END"
 		}
+		name := t + "_no_replace"
+		out[name] = "CREATE TRIGGER " + name + " BEFORE INSERT ON " + t +
+			" WHEN EXISTS (SELECT 1 FROM " + t + " WHERE " + replaceGuards[t] + ")" +
+			" BEGIN SELECT RAISE(ABORT, 'immutable: " + t + " rows cannot be replaced'); END"
 	}
 	return out
 }
