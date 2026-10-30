@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -96,7 +97,7 @@ func openProject(c *Ctx, projectFlag string) (*session, int) {
 	return &session{St: st, Proj: p, Reg: reg}, ExitOK
 }
 
-func isNoProject(err error) bool { return errorsIs(err, locate.ErrNoProject) }
+func isNoProject(err error) bool { return errors.Is(err, locate.ErrNoProject) }
 
 // reportFieldErrors prints every invalid field and returns the validation exit code.
 func reportFieldErrors(c *Ctx, errs []validate.FieldError) int {

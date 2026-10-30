@@ -125,7 +125,7 @@ func TestDocsMentionChecksums(t *testing.T) {
 func TestRepoHasNoForbiddenWords(t *testing.T) {
 	root := repoRoot
 	pats := []*regexp.Regexp{
-		regexp.MustCompile(`\bRin\b`),
+		regexp.MustCompile(`(?i)\bRin\b`),
 		regexp.MustCompile("changes" + "-context"),
 		regexp.MustCompile(`\b(CO|CT)-\d`),
 		regexp.MustCompile("(?i)roll" + "out in"),

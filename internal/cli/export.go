@@ -303,7 +303,6 @@ func defineImport(fs *flag.FlagSet) Handler {
 			needID(p, n.ID, n.Entries)
 			notFuture(p, n.At)
 			prefix(p, validate.Note(*n, s.Proj, opt))
-			n.Title = crlf(n.Title)
 			items = append(items, store.ImportItem{Note: n})
 			warnSecrets(c, prefixed(p, entryFields(n.Title, n.Entries)))
 		}
