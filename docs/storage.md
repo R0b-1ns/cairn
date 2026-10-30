@@ -137,6 +137,7 @@ Before any command runs, the database must pass every check. Failure refuses the
 - **Clone:** after cloning, register the project on that machine with `cairn project add <path>`, where `<path>` is the clone's folder. The command refuses a database that is not project mode or whose name is already registered.
 - **Machine mode:** the database stays under `<home>`. Move notes with `cairn export --format json --out FILE` and `cairn import FILE` (see `note-json.md`).
 - Two copies of a database that both receive writes diverge. Combine them with export and import. `import` refuses an ID that exists with different content, and changes nothing when it refuses.
+- **The `view` folder:** `cairn view` writes a website next to the database (`<root>/.cairn/view`, or `<home>/projects/<name>/view`). It is generated, it holds a `.gitignore` containing `*` so it is not committed, it never holds source data, and it is safe to delete. Each run rewrites it.
 
 ## Registry maintenance
 

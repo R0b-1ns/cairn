@@ -43,9 +43,26 @@ The server listens on 127.0.0.1 only. If the browser cannot be opened, `cairn: w
 
 With `--json`, one object: `{"dir": "...", "index": ".../index.html", "url": ""}`. `url` is empty without `--serve`; with `--serve` the object is printed once the server is listening.
 
+Ctrl-C and SIGTERM both stop the server; the command then exits 0. The `wrote` and `open` lines are printed before the server starts, so if the port cannot be bound they are printed and the command then exits 1.
+
+## The site
+
+The site is in English. It has four views, each a page with its own filters:
+
+- **Notes**: one row per note.
+- **Decisions**: every decision entry.
+- **Open points**: every open-point entry.
+- **Helpers**: every helper entry.
+
+The filters are status, task, repo, agent, a date range and text. Decisions and open points that are closed are hidden until "Show closed" is ticked; when all of them are closed, the page says so.
+
+Each note has a Markdown download. Each view has a "Download this view" button that exports only what is currently filtered.
+
+The pages work when opened straight from disk (`file://`) with no server, so `--serve` is optional.
+
 ## Exit codes
 
-- `0`: written (and, with `--serve`, stopped with Ctrl-C).
+- `0`: written (and, with `--serve`, stopped with Ctrl-C or SIGTERM).
 - `1`: runtime error: the site cannot be written (for example the `view` folder is a symlink), or the port cannot be bound.
 - `2`: usage error: a positional argument, `--port` outside 0 to 65535, `--port` or `--no-open` without `--serve`.
 - `4`: no project found.
@@ -57,3 +74,23 @@ cairn view --serve
 ```
 
 Writes the site, serves it on a free port of 127.0.0.1 and opens the browser. Exit code 0 after Ctrl-C.
+
+```
+cairn view --serve --port 8080 --no-open
+```
+
+Writes the site and serves it on `http://127.0.0.1:8080/` without opening the browser. Exit code 1 if port 8080 is in use, after the `wrote` and `open` lines.
+
+```
+cairn view --json
+```
+
+Writes the site and prints `{"dir": "...", "index": "...", "url": ""}`. Exit code 0.
+
+## Notes
+
+- Each run rewrites the `view` folder. Do not keep your own files in it.
+- The folder is generated: it holds a `.gitignore` containing `*`, so it is never committed. It holds no source data and is safe to delete. See `storage.md`.
+- The site is read-only and a copy: the database stays the source of truth. Run `cairn view` again to refresh it.
+- Note text is escaped in the HTML and never inserted as HTML in the browser. See `security.md`.
+- The command never writes to the database.

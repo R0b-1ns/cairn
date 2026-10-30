@@ -23,6 +23,18 @@ Threats cairn is built against, the mitigation for each, and what remains. Every
 | **Excess permissions.** Other local users read or change notes. | Data directory and `.cairn` folders are `0700`. Databases, the registry and exports are `0600`. A store that is world-writable, or a project folder that is world-writable without the sticky bit, is refused. | `internal/store/store.go`; `internal/registry`; `internal/locate`; `storage.md` |
 | **Release pipeline tampering.** A compromised workflow or action alters a published binary. | The release workflow sets `permissions: {}` at top level and grants write per job: `contents: write` for the binaries job and for release-please, `pull-requests: write` only for release-please. The CI workflow has `contents: read`. Checkouts use `persist-credentials: false`. Third-party actions are pinned to full commit SHAs. Binaries are built statically (`CGO_ENABLED=0`, `-trimpath`). `SHA256SUMS` is published with the binaries, and CI runs `go mod verify`. | `.github/workflows/ci.yml`; `.github/workflows/release-please.yml`; `scripts/build.sh` |
 
+### The view site
+
+`cairn view` writes a read-only website and can serve it.
+
+- Note text is escaped in the HTML and never inserted as HTML in the browser.
+- The server listens on 127.0.0.1 only. It accepts only the Host `127.0.0.1:<port>` or `localhost:<port>`, and refuses any other with 403.
+- It serves only `.html`, `.css`, `.js` and `.md` files from the `view` folder, never a dotfile, and only GET and HEAD requests.
+- Every response carries a strict Content-Security-Policy (`default-src 'none'`; scripts and styles only from the site itself).
+- The site is a copy and is not authoritative. The command never writes to the database.
+
+Code: `internal/view/serve.go`, `internal/view/write.go`.
+
 ### Verifying a release
 
 Download the release files into one folder, including `SHA256SUMS`, then run the check in that folder. Every file listed in `SHA256SUMS` must be present, and each one prints `OK`:
