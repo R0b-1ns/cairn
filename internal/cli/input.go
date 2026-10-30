@@ -131,3 +131,31 @@ func onlyAllowed(given map[string]bool, allowed ...string) bool {
 	}
 	return true
 }
+
+// entriesFromFlags orders flag entries: changes, decisions, open points, notes, helpers.
+// A decision text carries its author as a "user:" or "agent:" prefix.
+func entriesFromFlags(change, decision, open, note, helper []string) []model.Entry {
+	var out []model.Entry
+	for _, t := range change {
+		out = append(out, model.Entry{Type: model.TypeChange, Text: t})
+	}
+	for _, t := range decision {
+		e := model.Entry{Type: model.TypeDecision, Text: t}
+		for _, by := range []string{"user", "agent"} {
+			if strings.HasPrefix(t, by+":") {
+				e.By, e.Text = by, strings.TrimSpace(strings.TrimPrefix(t, by+":"))
+			}
+		}
+		out = append(out, e)
+	}
+	for _, t := range open {
+		out = append(out, model.Entry{Type: model.TypeOpen, Text: t})
+	}
+	for _, t := range note {
+		out = append(out, model.Entry{Type: model.TypeNote, Text: t})
+	}
+	for _, t := range helper {
+		out = append(out, model.Entry{Type: model.TypeHelper, Text: t})
+	}
+	return out
+}

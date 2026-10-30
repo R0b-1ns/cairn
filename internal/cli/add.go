@@ -3,7 +3,6 @@ package cli
 import (
 	"flag"
 	"fmt"
-	"strings"
 
 	"github.com/R0b-1ns/cairn/internal/model"
 	"github.com/R0b-1ns/cairn/internal/validate"
@@ -68,27 +67,7 @@ func defineAdd(fs *flag.FlagSet) Handler {
 		} else {
 			n = model.Note{Agent: agent, Repo: repo, Task: task, Model: mdl, Title: title,
 				Status: model.Status(status), Resolves: resolves, Supersedes: supersedes}
-			for _, t := range change {
-				n.Entries = append(n.Entries, model.Entry{Type: model.TypeChange, Text: t})
-			}
-			for _, t := range decision {
-				e := model.Entry{Type: model.TypeDecision, Text: t}
-				for _, by := range []string{"user", "agent"} {
-					if strings.HasPrefix(t, by+":") {
-						e.By, e.Text = by, strings.TrimSpace(strings.TrimPrefix(t, by+":"))
-					}
-				}
-				n.Entries = append(n.Entries, e)
-			}
-			for _, t := range open {
-				n.Entries = append(n.Entries, model.Entry{Type: model.TypeOpen, Text: t})
-			}
-			for _, t := range note {
-				n.Entries = append(n.Entries, model.Entry{Type: model.TypeNote, Text: t})
-			}
-			for _, t := range helper {
-				n.Entries = append(n.Entries, model.Entry{Type: model.TypeHelper, Text: t})
-			}
+			n.Entries = entriesFromFlags(change, decision, open, note, helper)
 			for _, t := range splitList(none) {
 				n.None = append(n.None, model.EntryType(t))
 			}
