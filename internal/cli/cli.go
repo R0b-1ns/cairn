@@ -21,6 +21,7 @@ const (
 	ExitUsage      = 2
 	ExitValidation = 3
 	ExitNoProject  = 4
+	ExitFindings   = 5 // check found problems
 )
 
 // Ctx is what every command handler receives.
@@ -56,18 +57,18 @@ func Commands() []Command {
 
 // Run executes cairn and returns the process exit code.
 func Run(args []string, stdin io.Reader, stdout, stderr io.Writer, getenv func(string) string) int {
-	c := &Ctx{Stdin: stdin, Stdout: stdout, Stderr: stderr, Getenv: getenv}
+	c := &Ctx{Stdin: stdin, Stdout: safeWriter{stdout}, Stderr: safeWriter{stderr}, Getenv: getenv}
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
 		usage(c)
 		return ExitOK
 	}
 	if args[0] == "--version" || args[0] == "version" {
-		fmt.Fprintf(stdout, "cairn %s\n", Version)
+		fmt.Fprintf(c.Stdout, "cairn %s\n", Version)
 		return ExitOK
 	}
 	cmd, rest := find(args)
 	if cmd == nil {
-		fmt.Fprintf(stderr, "cairn: unknown command %q (run 'cairn --help')\n", args[0])
+		fmt.Fprintf(c.Stderr, "cairn: unknown command %q (run 'cairn --help')\n", args[0])
 		return ExitUsage
 	}
 	fs := flag.NewFlagSet(cmd.Name, flag.ContinueOnError)
@@ -79,7 +80,7 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer, getenv func(s
 			commandHelp(c, cmd, fs)
 			return ExitOK
 		}
-		fmt.Fprintf(stderr, "cairn %s: %v\n", cmd.Name, err)
+		fmt.Fprintf(c.Stderr, "cairn %s: %v\n", cmd.Name, err)
 		return ExitUsage
 	}
 	return h(c, pos)

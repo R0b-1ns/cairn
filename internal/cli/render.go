@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"io"
 	"strings"
 	"unicode/utf8"
 )
@@ -66,4 +67,24 @@ func clip(s string, n int) string {
 		return ""
 	}
 	return string([]rune(s)[:n-1]) + "…"
+}
+
+// safeWriter is the single choke point for terminal output: whatever a command
+// prints, escape sequences and control characters from stored data never reach
+// the reader's terminal. JSON output is unaffected (it escapes control characters itself).
+type safeWriter struct{ w io.Writer }
+
+func (s safeWriter) Write(p []byte) (int, error) {
+	if _, err := io.WriteString(s.w, sanitize(string(p))); err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+// day returns the YYYY-MM-DD part of a timestamp, or the whole value when it is shorter.
+func day(at string) string {
+	if len(at) >= 10 {
+		return at[:10]
+	}
+	return at
 }

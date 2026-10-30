@@ -319,7 +319,7 @@ func defineList(fs *flag.FlagSet) Handler {
 				by = "[" + e.By + "] "
 			}
 			fmt.Fprintf(c.Stdout, "%s  %-8s %s  %s  %s  %s%s%s  %s\n", e.ID, e.Type, sanitize(t), sanitize(e.Repo),
-				e.At[:10], by, clip(sanitize(e.Text), textWidth), stateMarker(e), e.NoteID)
+				day(e.At), by, clip(sanitize(e.Text), textWidth), stateMarker(e), e.NoteID)
 		}
 		if total > len(items) {
 			fmt.Fprintf(c.Stdout, "... %d more (raise --max)\n", total-len(items))
@@ -381,7 +381,7 @@ func defineRecent(fs *flag.FlagSet) Handler {
 			if r.Notes == 1 {
 				word = "note"
 			}
-			fmt.Fprintf(c.Stdout, "%s  %s  %-11s %s  (%d %s)\n", r.Subject, r.LastAt[:10], r.Status,
+			fmt.Fprintf(c.Stdout, "%s  %s  %-11s %s  (%d %s)\n", r.Subject, day(r.LastAt), r.Status,
 				clip(sanitize(r.Title), textWidth), r.Notes, word)
 		}
 		return ExitOK

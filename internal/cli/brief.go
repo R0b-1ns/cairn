@@ -102,7 +102,7 @@ func defineBrief(fs *flag.FlagSet) Handler {
 			if task == "" {
 				task = "-"
 			}
-			lines = append(lines, fmt.Sprintf("  %s  %-8s %-11s %s  %s (%s, %s)", h.ID, task, h.Status, h.At[:10],
+			lines = append(lines, fmt.Sprintf("  %s  %-8s %-11s %s  %s (%s, %s)", h.ID, task, h.Status, day(h.At),
 				clip(sanitize(h.Title), textWidth), sanitize(h.Repo), sanitize(h.Agent)))
 		}
 		printSection(c, lines, f.max)
