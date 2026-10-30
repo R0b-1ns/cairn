@@ -376,6 +376,9 @@ func (s *Store) InsertNote(n model.Note) (model.Note, error) {
 		return n, err
 	}
 	base, ext, _ := validate.TaskParts(p, n.Task)
+	if n.At, err = normAt(n.At); err != nil {
+		return n, err
+	}
 	tx, err := s.db.Begin()
 	if err != nil {
 		return n, err
@@ -403,6 +406,10 @@ func (s *Store) InsertNote(n model.Note) (model.Note, error) {
 
 // InsertAddendum stores a validated addendum attached to an existing note.
 func (s *Store) InsertAddendum(a model.Addendum) (model.Addendum, error) {
+	var err error
+	if a.At, err = normAt(a.At); err != nil {
+		return a, err
+	}
 	tx, err := s.db.Begin()
 	if err != nil {
 		return a, err
