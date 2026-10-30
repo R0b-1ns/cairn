@@ -69,10 +69,11 @@ type noteRow struct {
 }
 
 type entriesContent struct {
-	Noun     string // "decisions", "open points", "helpers"
-	Author   bool   // decisions only
-	Rows     []entryRow
-	Download string // file name of the view download
+	Noun      string // "decisions", "open points", "helpers"
+	Author    bool   // decisions only
+	Rows      []entryRow
+	Download  string // file name of the view download
+	AllClosed bool   // there are rows and every one is closed
 }
 
 type entryRow struct {
@@ -217,6 +218,12 @@ func render(s *Site) (map[string][]byte, error) {
 				NoteID: e.NoteID, Closed: e.Closed, State: stateLabel(e.Type, e.Closed),
 				Search: strings.ToLower(strings.Join([]string{e.ID, e.Text, e.Task, e.Repo, e.Agent, e.NoteID}, " ")),
 			})
+		}
+		c.AllClosed = len(c.Rows) > 0
+		for _, r := range c.Rows {
+			if !r.Closed {
+				c.AllClosed = false
+			}
 		}
 		p.Content = c
 		if err := renderPage(files, v.file, "entries.html", p); err != nil {

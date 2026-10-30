@@ -64,6 +64,7 @@
   var form = document.getElementById("filters");
   var count = document.getElementById("count");
   var noMatch = document.getElementById("no-match");
+  var allClosed = document.getElementById("all-closed");
   var download = document.getElementById("download-view");
   var isNotes = document.body.getAttribute("data-view") === "notes";
   var rows = table ? Array.prototype.slice.call(table.tBodies[0].rows) : [];
@@ -104,7 +105,9 @@
       if (ok) shown++;
     }
     if (count) count.textContent = shown + " of " + rows.length;
-    if (noMatch) noMatch.hidden = !(rows.length > 0 && shown === 0);
+    // allClosed is rendered only when every row is closed; it explains an empty table better than no-match.
+    if (allClosed) allClosed.hidden = f.showClosed;
+    if (noMatch) noMatch.hidden = !(rows.length > 0 && shown === 0) || (allClosed !== null && !allClosed.hidden);
   }
 
   function visibleIds() {

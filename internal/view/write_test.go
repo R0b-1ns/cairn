@@ -290,8 +290,8 @@ func TestWriteEmptySite(t *testing.T) {
 
 func TestWriteAllClosedEntriesAndAllNone(t *testing.T) {
 	s := sampleSite()
-	// keep only the closed decision
-	s.Entries = []EntryRow{s.Entries[4]}
+	// keep only the superseded decision and the resolved open point
+	s.Entries = []EntryRow{s.Entries[4], s.Entries[5]}
 	nv := &s.Notes[0]
 	nv.Note.Entries = nil
 	nv.Note.None = []model.EntryType{model.TypeChange, model.TypeDecision, model.TypeOpen, model.TypeNote, model.TypeHelper}
@@ -302,6 +302,28 @@ func TestWriteAllClosedEntriesAndAllNone(t *testing.T) {
 	}
 	if !strings.Contains(page, `id="show-closed"`) || !strings.Contains(page, "Show closed") {
 		t.Fatal("show closed control missing")
+	}
+	// every row is closed: a visible server-side message, plus the no-match element
+	allClosed := regexp.MustCompile(`<p class="empty" id="all-closed">All decisions are closed\. Tick Show closed to see them\.</p>`)
+	if !allClosed.MatchString(page) {
+		t.Fatal("all-closed message missing or hidden on decisions")
+	}
+	if !strings.Contains(page, `id="no-match" hidden>No matching decisions.`) {
+		t.Fatal("no-match element missing on decisions")
+	}
+	open := readFile(t, dir, "open-points.html")
+	if !strings.Contains(open, `<p class="empty" id="all-closed">All open points are closed. Tick Show closed to see them.</p>`) {
+		t.Fatal("all-closed message missing on open points")
+	}
+	if !strings.Contains(open, `id="no-match" hidden>No matching open points.`) {
+		t.Fatal("no-match element missing on open points")
+	}
+	// with an open row, or no closed state at all, there is no all-closed message
+	if full := readFile(t, writeSite(t, sampleSite()), "decisions.html"); strings.Contains(full, `id="all-closed"`) {
+		t.Fatal("all-closed message shown though a decision is active")
+	}
+	if strings.Contains(readFile(t, dir, "helpers.html"), `id="all-closed"`) {
+		t.Fatal("all-closed message on helpers")
 	}
 	note := readFile(t, dir, "notes/n-bbbbbb.html")
 	if got := strings.Count(note, `class="none"`); got != 5 {

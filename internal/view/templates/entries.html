@@ -43,5 +43,8 @@
 {{- else}}
 <p class="empty">No {{.Content.Noun}} yet.</p>
 {{- end}}
+{{- if .Content.AllClosed}}
+<p class="empty" id="all-closed">All {{.Content.Noun}} are closed. Tick Show closed to see them.</p>
+{{- end}}
 <p class="empty" id="no-match" hidden>No matching {{.Content.Noun}}.</p>
 {{end}}
