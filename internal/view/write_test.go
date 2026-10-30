@@ -391,6 +391,26 @@ func TestNoteMarkdownFileIsHeaderPlusNote(t *testing.T) {
 	}
 }
 
+// A browser ignores the download attribute on a file:// link and shows the .md as
+// text instead, so the note page loads data.js and marks its link for app.js,
+// which builds the same file in the page.
+func TestNotePageDownloadWorksFromDisk(t *testing.T) {
+	dir := writeSite(t, sampleSite())
+	page := readFile(t, dir, "notes/n-aaaaaa.html")
+	for _, want := range []string{
+		`<script src="../data.js"></script>`,
+		`id="download-note"`, `data-note="n-aaaaaa"`, `href="n-aaaaaa.md"`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Fatalf("note page lacks %s", want)
+		}
+	}
+	js := readFile(t, dir, "assets/app.js")
+	if !strings.Contains(js, `getElementById("download-note")`) {
+		t.Fatal("app.js does not handle the note download")
+	}
+}
+
 func TestDataJSCarriesAgentAndMarkdown(t *testing.T) {
 	s := sampleSite()
 	dir := writeSite(t, s)

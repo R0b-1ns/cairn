@@ -168,6 +168,18 @@
     form.addEventListener("submit", function (ev) { ev.preventDefault(); });
     form.addEventListener("reset", function () { setTimeout(apply, 0); });
   }
+  // A browser ignores the download attribute of a file:// link and shows the .md instead,
+  // so build the same file (header + note) from data.js; the link stays the fallback.
+  var noteLink = document.getElementById("download-note");
+  if (noteLink) {
+    noteLink.addEventListener("click", function (ev) {
+      var data = window.CAIRN;
+      var id = noteLink.dataset.note;
+      if (!data || !data.notes || typeof data.notes[id] !== "string") return;
+      ev.preventDefault();
+      save(id + ".md", notesMarkdown(data, [id]));
+    });
+  }
   if (download) {
     download.addEventListener("click", function () {
       var data = window.CAIRN || { header: "", notes: {}, entries: {} };
