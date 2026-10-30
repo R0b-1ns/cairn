@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -31,6 +32,24 @@ type EntryInfo struct {
 	Closed     bool   `json:"closed"`
 	ClosedBy   string `json:"closed_by"` // ID of the note or addendum that closes it
 	ClosedAt   string `json:"closed_at"`
+}
+
+// MarshalJSON always emits every key so consumers can rely on the shape.
+func (e EntryInfo) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		ID         string          `json:"id"`
+		Type       model.EntryType `json:"type"`
+		Text       string          `json:"text"`
+		By         string          `json:"by"`
+		NoteID     string          `json:"note_id"`
+		AddendumID string          `json:"addendum_id"`
+		Task       string          `json:"task"`
+		Repo       string          `json:"repo"`
+		At         string          `json:"at"`
+		Closed     bool            `json:"closed"`
+		ClosedBy   string          `json:"closed_by"`
+		ClosedAt   string          `json:"closed_at"`
+	}{e.ID, e.Type, e.Text, e.By, e.NoteID, e.AddendumID, e.Task, e.Repo, e.At, e.Closed, e.ClosedBy, e.ClosedAt})
 }
 
 const entrySelect = `
