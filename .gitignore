@@ -1,0 +1,4 @@
+/dist/
+/cairn
+*.test
+.DS_Store
