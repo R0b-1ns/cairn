@@ -167,6 +167,30 @@ func TestOpenRejectsMissingTriggers(t *testing.T) {
 	}
 }
 
+func TestOpenRejectsForeignSchemaObjects(t *testing.T) {
+	cases := map[string]string{
+		"extra trigger": "CREATE TRIGGER sneaky AFTER INSERT ON notes BEGIN SELECT 1; END",
+		"extra view":    "CREATE VIEW v AS SELECT * FROM notes",
+		"extra index":   "CREATE INDEX sneaky_idx ON notes(title)",
+		"extra table":   "CREATE TABLE sneaky(x)",
+		"altered table": "ALTER TABLE notes ADD COLUMN extra TEXT",
+	}
+	for name, stmt := range cases {
+		t.Run(name, func(t *testing.T) {
+			s, path := newStore(t)
+			s.Close()
+			db := rawDB(t, path)
+			if _, err := db.Exec(stmt); err != nil {
+				t.Fatal(err)
+			}
+			db.Close()
+			if _, err := Open(path); err == nil || !strings.Contains(err.Error(), "schema") {
+				t.Fatalf("want schema error, got %v", err)
+			}
+		})
+	}
+}
+
 func TestOpenRejectsBadVersionAndNonCairnDB(t *testing.T) {
 	s, path := newStore(t)
 	s.Close()

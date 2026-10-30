@@ -39,6 +39,7 @@ func dsn(path, mode string) string {
 	q.Add("mode", mode)
 	q.Add("_txlock", "immediate")
 	q.Add("_pragma", "foreign_keys(1)")
+	q.Add("_pragma", "trusted_schema(0)")
 	q.Add("_pragma", "busy_timeout(5000)")
 	u := url.URL{Scheme: "file", Path: path, RawQuery: q.Encode()}
 	return u.String()
@@ -152,9 +153,75 @@ func (s *Store) verify() error {
 			return fmt.Errorf("immutability trigger %s was altered: database refused", name)
 		}
 	}
+	if err := s.verifySchema(); err != nil {
+		return err
+	}
 	var n int
 	if err := s.db.QueryRow("SELECT COUNT(*) FROM project").Scan(&n); err != nil || n != 1 {
 		return fmt.Errorf("project row missing: database refused")
+	}
+	return nil
+}
+
+// schemaObjects maps "type:name" to normalized SQL for everything in sqlite_master.
+func schemaObjects(db *sql.DB) (map[string]string, error) {
+	rows, err := db.Query("SELECT type, name, COALESCE(sql,'') FROM sqlite_master")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var t, n, q string
+		if err := rows.Scan(&t, &n, &q); err != nil {
+			return nil, err
+		}
+		out[t+":"+n] = normalizeSQL(q)
+	}
+	return out, rows.Err()
+}
+
+// expectedSchema builds the reference schema in memory from the same SQL used by Create.
+func expectedSchema() (map[string]string, error) {
+	db, err := sql.Open("sqlite", "file::memory:")
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+	if _, err := db.Exec(tableSQL); err != nil {
+		return nil, err
+	}
+	for _, stmt := range triggerSQL() {
+		if _, err := db.Exec(stmt); err != nil {
+			return nil, err
+		}
+	}
+	return schemaObjects(db)
+}
+
+// verifySchema refuses a database whose schema differs in any way from ours:
+// extra or missing tables, indexes, views or triggers, or altered definitions.
+func (s *Store) verifySchema() error {
+	want, err := expectedSchema()
+	if err != nil {
+		return err
+	}
+	have, err := schemaObjects(s.db)
+	if err != nil {
+		return fmt.Errorf("not a cairn database: %w", err)
+	}
+	for k, v := range have {
+		if w, ok := want[k]; !ok {
+			return fmt.Errorf("unexpected schema object %s: database refused", k)
+		} else if w != v {
+			return fmt.Errorf("schema object %s differs from the expected definition: database refused", k)
+		}
+	}
+	for k := range want {
+		if _, ok := have[k]; !ok {
+			return fmt.Errorf("schema object %s is missing: database refused", k)
+		}
 	}
 	return nil
 }
