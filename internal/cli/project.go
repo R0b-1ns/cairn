@@ -164,13 +164,19 @@ func defineProjects(fs *flag.FlagSet) Handler {
 			}
 			db := reg.MachineDBPath(e.Name)
 			if e.Mode == model.ModeProject {
-				db = filepath.Join(e.Path, ".cairn", "cairn.db")
-			}
-			if st, err := store.Open(db); err == nil {
-				if n, err := st.CountNotes(); err == nil {
-					row.Notes = n
+				var found bool
+				var err error
+				if db, found, err = locate.CheckStore(e.Path); err != nil || !found {
+					db = ""
 				}
-				st.Close()
+			}
+			if db != "" {
+				if st, err := store.Open(db); err == nil {
+					if n, err := st.CountNotes(); err == nil {
+						row.Notes = n
+					}
+					st.Close()
+				}
 			}
 			rows = append(rows, row)
 		}

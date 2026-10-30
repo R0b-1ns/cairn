@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"syscall"
 
 	"github.com/R0b-1ns/cairn/internal/model"
 	"github.com/R0b-1ns/cairn/internal/registry"
@@ -20,6 +21,24 @@ type Location struct {
 	Mode   string // "project" or "machine"
 	Root   string // project root folder
 	DBPath string
+}
+
+// uidFunc returns the effective user ID; tests replace it.
+var uidFunc = os.Geteuid
+
+// checkTrusted refuses a store entry that another user could have planted or
+// could modify: it must be owned by the current user (root excepted) and must
+// not be world-writable.
+func checkTrusted(path string, fi os.FileInfo) error {
+	if fi.Mode().Perm()&0o002 != 0 {
+		return fmt.Errorf("refusing %s: it is world-writable", path)
+	}
+	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
+		if uid := uidFunc(); uid != 0 && int(st.Uid) != uid {
+			return fmt.Errorf("refusing %s: owned by another user (uid %d)", path, st.Uid)
+		}
+	}
+	return nil
 }
 
 // CheckStore reports the project-mode database of a project root. found is false
@@ -37,6 +56,9 @@ func CheckStore(root string) (dbPath string, found bool, err error) {
 	if !fi.IsDir() {
 		return "", false, fmt.Errorf("%s exists but is not a folder", dir)
 	}
+	if err := checkTrusted(dir, fi); err != nil {
+		return "", false, err
+	}
 	db := filepath.Join(dir, "cairn.db")
 	fi, err = os.Lstat(db)
 	if err != nil {
@@ -47,6 +69,9 @@ func CheckStore(root string) (dbPath string, found bool, err error) {
 	}
 	if !fi.Mode().IsRegular() {
 		return "", false, fmt.Errorf("%s is not a regular file", db)
+	}
+	if err := checkTrusted(db, fi); err != nil {
+		return "", false, err
 	}
 	return db, true, nil
 }
@@ -60,12 +85,18 @@ func samePath(a, b string) bool {
 	return err1 == nil && err2 == nil && os.SameFile(ai, bi)
 }
 
-func fromEntry(reg *registry.Registry, e registry.Entry) Location {
-	db := reg.MachineDBPath(e.Name)
+func fromEntry(reg *registry.Registry, e registry.Entry) (Location, error) {
 	if e.Mode == model.ModeProject {
-		db = filepath.Join(e.Path, ".cairn", "cairn.db")
+		db, found, err := CheckStore(e.Path)
+		if err != nil {
+			return Location{}, err
+		}
+		if !found {
+			return Location{}, fmt.Errorf("%w: no .cairn/cairn.db at %s (project %q)", ErrNoProject, e.Path, e.Name)
+		}
+		return Location{Name: e.Name, Mode: e.Mode, Root: e.Path, DBPath: db}, nil
 	}
-	return Location{Name: e.Name, Mode: e.Mode, Root: e.Path, DBPath: db}
+	return Location{Name: e.Name, Mode: e.Mode, Root: e.Path, DBPath: reg.MachineDBPath(e.Name)}, nil
 }
 
 // Find locates the project for cwd. A non-empty name (from --project or
@@ -82,7 +113,7 @@ func Find(cwd, name string, reg *registry.Registry) (Location, error) {
 		if err != nil {
 			return Location{}, err
 		}
-		return fromEntry(reg, e), nil
+		return fromEntry(reg, e)
 	}
 	abs, err := filepath.Abs(cwd)
 	if err != nil {
@@ -108,7 +139,7 @@ func Find(cwd, name string, reg *registry.Registry) (Location, error) {
 		}
 		for _, e := range entries {
 			if e.Mode == model.ModeMachine && samePath(e.Path, dir) {
-				return fromEntry(reg, e), nil
+				return fromEntry(reg, e)
 			}
 		}
 		parent := filepath.Dir(dir)
