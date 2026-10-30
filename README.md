@@ -1,11 +1,16 @@
-# cairn
+# cairn 🪨
 
-`cairn` is a small command-line tool that stores **immutable work notes** in SQLite and returns them in small, precise slices. It is built for people and AI agents working on the same project: ask for one task, one repo, one kind of entry or one open question, and spend context only on the answer.
+**Leave a stone for whoever comes next.**
 
-- One static binary, no runtime, no server.
-- Notes and addenda cannot be edited or deleted (SQLite triggers reject it). Later facts are added as addenda.
-- Two storage modes: a `.cairn/` folder inside the project (shareable through its repository), or a private database in your data directory.
-- `cairn guide` prints a one-page guide for AI agents. Every command has `--help`.
+A cairn is a small pile of stones left on the trail so the next traveler knows the way. This one is for your project: why was it built this way, what changed, what is still open?
+
+Every new session, human or AI, starts by asking those questions again. `cairn` is a tiny command-line tool where people and agents drop short, permanent notes as they work, then ask for exactly the slice they need (one task, one repo, one open question) instead of rereading everything.
+
+- **One file, zero setup.** A single static binary: no runtime, no server.
+- **Can't be rewritten.** Notes are immutable and SQLite itself refuses edits. New facts go in addenda, so the original is never lost.
+- **Cheap to read.** `cairn brief TP-03` gives you a whole task in a few lines, always with IDs, so an agent spends its context on the answer.
+- **Yours to keep.** Store notes in the project's own `.cairn/` folder and share them through git, or keep them private on your machine.
+- **Made for agents.** `cairn guide` prints a one-page guide an AI can read on its own. Every command has `--help`.
 
 ## Install
 
