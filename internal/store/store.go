@@ -375,15 +375,23 @@ func (s *Store) InsertNote(n model.Note) (model.Note, error) {
 	if err != nil {
 		return n, err
 	}
-	base, ext, _ := validate.TaskParts(p, n.Task)
-	if n.At, err = normAt(n.At); err != nil {
-		return n, err
-	}
 	tx, err := s.db.Begin()
 	if err != nil {
 		return n, err
 	}
 	defer tx.Rollback()
+	if n, err = insertNoteTx(tx, p, n); err != nil {
+		return n, err
+	}
+	return n, tx.Commit()
+}
+
+func insertNoteTx(tx *sql.Tx, p model.Project, n model.Note) (model.Note, error) {
+	var err error
+	base, ext, _ := validate.TaskParts(p, n.Task)
+	if n.At, err = normAt(n.At); err != nil {
+		return n, err
+	}
 	if n.ID, err = assignID(tx, 'n', n.ID); err != nil {
 		return n, err
 	}
@@ -398,23 +406,28 @@ func (s *Store) InsertNote(n model.Note) (model.Note, error) {
 	if n.Entries, err = insertEntries(tx, n.ID, "", n.Entries); err != nil {
 		return n, err
 	}
-	if err = insertLinks(tx, n.ID, "", n.Resolves, n.Supersedes); err != nil {
-		return n, err
-	}
-	return n, tx.Commit()
+	err = insertLinks(tx, n.ID, "", n.Resolves, n.Supersedes)
+	return n, err
 }
 
 // InsertAddendum stores a validated addendum attached to an existing note.
 func (s *Store) InsertAddendum(a model.Addendum) (model.Addendum, error) {
-	var err error
-	if a.At, err = normAt(a.At); err != nil {
-		return a, err
-	}
 	tx, err := s.db.Begin()
 	if err != nil {
 		return a, err
 	}
 	defer tx.Rollback()
+	if a, err = insertAddendumTx(tx, a); err != nil {
+		return a, err
+	}
+	return a, tx.Commit()
+}
+
+func insertAddendumTx(tx *sql.Tx, a model.Addendum) (model.Addendum, error) {
+	var err error
+	if a.At, err = normAt(a.At); err != nil {
+		return a, err
+	}
 	var one int
 	if err = tx.QueryRow(`SELECT 1 FROM notes WHERE id=?`, a.NoteID).Scan(&one); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -433,10 +446,8 @@ func (s *Store) InsertAddendum(a model.Addendum) (model.Addendum, error) {
 	if a.Entries, err = insertEntries(tx, "", a.ID, a.Entries); err != nil {
 		return a, err
 	}
-	if err = insertLinks(tx, "", a.ID, a.Resolves, a.Supersedes); err != nil {
-		return a, err
-	}
-	return a, tx.Commit()
+	err = insertLinks(tx, "", a.ID, a.Resolves, a.Supersedes)
+	return a, err
 }
 
 func loadEntries(q interface {
