@@ -11,7 +11,7 @@ import (
 
 func workflows(t *testing.T) map[string]string {
 	t.Helper()
-	files, err := filepath.Glob(filepath.Join("..", "..", ".github", "workflows", "*.yml"))
+	files, err := filepath.Glob(filepath.Join("..", "..", ".github", "workflows", "*.y*ml")) // .yml and .yaml
 	if err != nil || len(files) == 0 {
 		t.Fatalf("no workflow files found: %v", err)
 	}
@@ -117,5 +117,65 @@ func TestDependabotKeepsActionsAndModulesCurrent(t *testing.T) {
 		if !strings.Contains(string(b), `package-ecosystem: "`+eco+`"`) {
 			t.Errorf("dependabot.yml must update %s", eco)
 		}
+	}
+}
+
+// jobs splits a workflow into its jobs (two-space-indented keys under jobs:).
+func jobs(body string) map[string]string {
+	out := map[string]string{}
+	after := body[strings.Index(body, "\njobs:")+1:]
+	var name string
+	for _, line := range strings.Split(after, "\n")[1:] {
+		if m := regexp.MustCompile(`^  ([A-Za-z0-9_-]+):\s*$`).FindStringSubmatch(line); m != nil {
+			name = m[1]
+			continue
+		}
+		if name != "" {
+			out[name] += line + "\n"
+		}
+	}
+	return out
+}
+
+// The job that can write to the repository must only publish: code that runs
+// tests or builds (and could be compromised through a dependency) never holds the write token.
+func TestWriteTokenJobsOnlyPublish(t *testing.T) {
+	for name, body := range workflows(t) {
+		for job, text := range jobs(body) {
+			if !strings.Contains(text, "write") {
+				continue
+			}
+			for _, banned := range []string{"go test", "go build", "scripts/build.sh", "actions/setup-go", "go mod"} {
+				if strings.Contains(text, banned) {
+					t.Errorf("%s: job %q has write permission and also runs %q; split building from publishing", name, job, banned)
+				}
+			}
+		}
+	}
+}
+
+func TestBuildJobsAreReadOnlyAndVerified(t *testing.T) {
+	all := workflows(t)
+	for _, name := range []string{"ci.yml", "release-please.yml"} {
+		for job, text := range jobs(all[name]) {
+			if !strings.Contains(text, "scripts/build.sh") {
+				continue
+			}
+			if strings.Contains(text, "write") {
+				t.Errorf("%s: build job %q must not have write permission", name, job)
+			}
+			if !strings.Contains(text, "go mod verify") {
+				t.Errorf("%s: build job %q must run go mod verify", name, job)
+			}
+			if !regexp.MustCompile(`cache:\s*false`).MatchString(text) {
+				t.Errorf("%s: build job %q must disable the setup-go cache", name, job)
+			}
+		}
+	}
+}
+
+func TestMergedBuildsKeepTheirBinaries(t *testing.T) {
+	if !strings.Contains(workflows(t)["ci.yml"], "actions/upload-artifact@") {
+		t.Error("ci.yml must upload the built binaries as an artifact")
 	}
 }

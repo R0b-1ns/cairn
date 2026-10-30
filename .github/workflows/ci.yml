@@ -19,7 +19,14 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          cache: false
       - run: go mod verify
       - run: go vet ./...
       - run: go test -race -count=1 ./...
       - run: scripts/build.sh ci
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: github.event_name == 'push'
+        with:
+          name: cairn-binaries
+          path: dist/
+          retention-days: 14
