@@ -141,12 +141,26 @@ func writeNew(path, body string, force bool) error {
 }
 
 func renderMarkdown(s *session, doc exportDoc) (string, error) {
+	notes, err := renderMarkdownNotes(s, doc)
+	if err != nil {
+		return "", err
+	}
+	return renderMarkdownHeader(doc.Project) + notes, nil
+}
+
+// renderMarkdownHeader is the project name line and the context paragraph.
+func renderMarkdownHeader(p model.Project) string {
 	var b strings.Builder
-	p := doc.Project
 	fmt.Fprintf(&b, "# %s\n\n", sanitize(p.Name))
 	if p.Context != "" {
 		fmt.Fprintf(&b, "%s\n\n", sanitize(p.Context))
 	}
+	return b.String()
+}
+
+// renderMarkdownNotes is everything after the header: the notes and their addenda.
+func renderMarkdownNotes(s *session, doc exportDoc) (string, error) {
+	var b strings.Builder
 	entry := func(e model.Entry) (string, error) {
 		info, err := s.St.Entry(e.ID)
 		if err != nil {
