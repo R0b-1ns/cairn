@@ -83,8 +83,8 @@ func (s *Store) init(p model.Project) error {
 		}
 	}
 	repos, _ := json.Marshal(p.Repos)
-	if _, err := tx.Exec(`INSERT INTO project(id,name,mode,context,repos,task_pattern) VALUES (1,?,?,?,?,?)`,
-		p.Name, p.Mode, p.Context, string(repos), p.TaskPattern); err != nil {
+	if _, err := tx.Exec(`INSERT INTO project(id,name,mode,context,repos,default_repo,task_pattern) VALUES (1,?,?,?,?,?,?)`,
+		p.Name, p.Mode, p.Context, string(repos), p.DefaultRepo, p.TaskPattern); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
@@ -236,8 +236,8 @@ func (s *Store) Path() string { return s.path }
 func (s *Store) Project() (model.Project, error) {
 	var p model.Project
 	var repos string
-	err := s.db.QueryRow(`SELECT name,mode,context,repos,task_pattern FROM project WHERE id=1`).
-		Scan(&p.Name, &p.Mode, &p.Context, &repos, &p.TaskPattern)
+	err := s.db.QueryRow(`SELECT name,mode,context,repos,default_repo,task_pattern FROM project WHERE id=1`).
+		Scan(&p.Name, &p.Mode, &p.Context, &repos, &p.DefaultRepo, &p.TaskPattern)
 	if err != nil {
 		return p, err
 	}

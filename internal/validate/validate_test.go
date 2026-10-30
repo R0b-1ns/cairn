@@ -500,3 +500,19 @@ func TestCommitErrorDoesNotEchoValue(t *testing.T) {
 		}
 	}
 }
+
+func TestProjectDefaultRepo(t *testing.T) {
+	p := tidepool()
+	p.DefaultRepo = "client"
+	if errs := Project(p); len(errs) != 0 {
+		t.Errorf("default repo in repos rejected: %v", errs)
+	}
+	p.DefaultRepo = "other"
+	if !hasField(Project(p), "default_repo") {
+		t.Error("default repo outside repos must be refused with Field \"default_repo\"")
+	}
+	p.DefaultRepo = ""
+	if errs := Project(p); len(errs) != 0 {
+		t.Errorf("an empty default repo is allowed: %v", errs)
+	}
+}

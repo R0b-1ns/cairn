@@ -6,7 +6,7 @@ import (
 )
 
 // SchemaVersion is stored in PRAGMA user_version.
-const SchemaVersion = 2
+const SchemaVersion = 3
 
 // contentTables are the tables protected by immutability triggers.
 var contentTables = []string{"project", "notes", "entries", "addenda", "links"}
@@ -18,6 +18,7 @@ CREATE TABLE project (
 	mode TEXT NOT NULL,
 	context TEXT NOT NULL,
 	repos TEXT NOT NULL,
+	default_repo TEXT NOT NULL DEFAULT '',
 	task_pattern TEXT NOT NULL
 );
 CREATE TABLE notes (

@@ -32,12 +32,16 @@ func defineInit(fs *flag.FlagSet) Handler {
 	fs.StringVar(&path, "path", "", "project root folder (default: current directory)")
 	fs.StringVar(&p.Context, "context", "", "a few lines describing the project")
 	fs.StringVar(&repos, "repos", "", "comma-separated allowed repo names (required)")
+	fs.StringVar(&p.DefaultRepo, "default-repo", "", "repo used by add when --repo is omitted; must be one of --repos (default: the only repo when there is just one)")
 	fs.StringVar(&p.TaskPattern, "task-pattern", model.DefaultTaskPattern, "regular expression with a named group (?P<base>...) and optionally (?P<ext>...)")
 	return func(c *Ctx, args []string) int {
 		if len(args) != 0 {
 			return fail(c, ExitUsage, "init takes no arguments")
 		}
 		p.Repos = splitList(repos)
+		if p.DefaultRepo == "" && len(p.Repos) == 1 {
+			p.DefaultRepo = p.Repos[0] // most projects have one repo: no need to name it every time
+		}
 		if errs := validate.Project(p); len(errs) != 0 {
 			return reportFieldErrors(c, errs)
 		}
@@ -125,7 +129,11 @@ func defineContext(fs *flag.FlagSet) Handler {
 			return ExitOK
 		}
 		p := s.Proj
-		fmt.Fprintf(c.Stdout, "project: %s (%s mode)\nrepos: %s\ntask pattern: %s\n", p.Name, p.Mode, strings.Join(p.Repos, ", "), p.TaskPattern)
+		fmt.Fprintf(c.Stdout, "project: %s (%s mode)\nrepos: %s\n", p.Name, p.Mode, strings.Join(p.Repos, ", "))
+		if p.DefaultRepo != "" {
+			fmt.Fprintf(c.Stdout, "default repo: %s\n", p.DefaultRepo)
+		}
+		fmt.Fprintf(c.Stdout, "task pattern: %s\n", p.TaskPattern)
 		if p.Context != "" {
 			fmt.Fprintf(c.Stdout, "\n%s\n", p.Context)
 		}

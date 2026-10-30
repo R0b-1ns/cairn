@@ -166,7 +166,9 @@ func Note(n model.Note, p model.Project, o Options) []FieldError {
 	if !validStatus(n.Status) {
 		c.addf("status", "must be done, in_progress or blocked")
 	}
-	if !contains(p.Repos, n.Repo) {
+	if n.Repo == "" {
+		c.addf("repo", "is required: pass --repo (allowed: %s), or set a default with `cairn init --default-repo`", strings.Join(p.Repos, ", "))
+	} else if !contains(p.Repos, n.Repo) {
 		c.addf("repo", "%s is not an allowed repo (allowed: %s)", quote(n.Repo), strings.Join(p.Repos, ", "))
 	}
 	if n.Task != "" {
@@ -269,6 +271,9 @@ func Project(p model.Project) []FieldError {
 		if !repoRe.MatchString(r) {
 			c.addf("repos", "%s must match %s", quote(r), repoRe)
 		}
+	}
+	if p.DefaultRepo != "" && !contains(p.Repos, p.DefaultRepo) {
+		c.addf("default_repo", "%s is not one of the repos", quote(p.DefaultRepo))
 	}
 	if len(p.TaskPattern) > MaxPatternLen {
 		c.addf("task_pattern", "too long (max %d characters)", MaxPatternLen)

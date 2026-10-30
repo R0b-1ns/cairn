@@ -71,6 +71,7 @@ type Project struct {
 	Mode        string   `json:"mode"` // "project" or "machine"
 	Context     string   `json:"context"`
 	Repos       []string `json:"repos"`
+	DefaultRepo string   `json:"default_repo"` // repo used by add when --repo is omitted; "" = none
 	TaskPattern string   `json:"task_pattern"`
 }
 

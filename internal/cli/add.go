@@ -20,7 +20,7 @@ func defineAdd(fs *flag.FlagSet) Handler {
 	var change, decision, open, note, helper, impact, commit, resolves, supersedes multi
 	var stdin bool
 	fs.StringVar(&agent, "agent", "", "agent name (required)")
-	fs.StringVar(&repo, "repo", "", "repo the work was done in; must be one of the project's repos (required)")
+	fs.StringVar(&repo, "repo", "", "repo the work was done in; must be one of the project's repos (default: the project's default repo)")
 	fs.StringVar(&task, "task", "", "task ID matching the project's task pattern (optional)")
 	fs.StringVar(&mdl, "model", "", "model that did the work (required)")
 	fs.StringVar(&title, "title", "", "short title (required)")
@@ -77,6 +77,9 @@ func defineAdd(fs *flag.FlagSet) Handler {
 			for _, v := range commit {
 				n.Commits = append(n.Commits, splitList(v)...)
 			}
+		}
+		if n.Repo == "" {
+			n.Repo = s.Proj.DefaultRepo
 		}
 		n.Title = crlf(n.Title)
 		normalizeEntries(n.Entries)

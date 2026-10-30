@@ -5,7 +5,7 @@ Creates one immutable work note, from flags or from one JSON object on standard 
 ## Usage
 
 ```
-cairn add --agent NAME --repo REPO --model MODEL --title TITLE --status STATUS [--task TASK] [--change TEXT]... [--decision TEXT]... [--open TEXT]... [--note TEXT]... [--helper TEXT]... [--none TYPES] [--impact REPO]... [--commit HASH]... [--resolves ID]... [--supersedes ID]... [--project NAME] [--json]
+cairn add --agent NAME [--repo REPO] --model MODEL --title TITLE --status STATUS [--task TASK] [--change TEXT]... [--decision TEXT]... [--open TEXT]... [--note TEXT]... [--helper TEXT]... [--none TYPES] [--impact REPO]... [--commit HASH]... [--resolves ID]... [--supersedes ID]... [--project NAME] [--json]
 cairn add --stdin [--project NAME] [--json]
 ```
 
@@ -18,7 +18,7 @@ None. A positional argument gives exit code 2.
 | Flag | Default | Allowed values | Meaning |
 |---|---|---|---|
 | `--agent` | (empty) | any name, 1-80 characters | Agent name. Required in flag mode. |
-| `--repo` | (empty) | a repo listed in the project's repos | Repo the work was done in. Required in flag mode. |
+| `--repo` | (empty) | a repo listed in the project's repos | Repo the work was done in. Optional when the project has a default repo (`cairn context` shows it); otherwise required. With `--stdin`, a missing `repo` uses the default the same way. |
 | `--task` | (empty) | a task ID matching the project task pattern, e.g. `TP-03`, `TP-03.1` | Task ID. Optional. |
 | `--model` | (empty) | any name, 1-80 characters | Model that did the work. Required in flag mode. |
 | `--title` | (empty) | one line, 1-200 characters | Short title. Required in flag mode. |

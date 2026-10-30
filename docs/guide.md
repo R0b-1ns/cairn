@@ -41,7 +41,7 @@ cairn add --agent builder --repo server --task TP-03 --model claude-opus-5-5 \
 
 Rules:
 
-- Required: `--agent`, `--repo` (one of the project's repos), `--model`, `--title`, `--status` (`done`, `in_progress`, `blocked`). `--task` is optional and must match the project's task pattern.
+- Required: `--agent`, `--model`, `--title`, `--status` (`done`, `in_progress`, `blocked`), and `--repo` (one of the project's repos) unless the project has a default repo (`cairn context` shows it). `--task` is optional and must match the project's task pattern.
 - Five sections exist: `change` (short summary of what was done), `decision` (a choice and its reason), `open` (an open point), `note` (something worth knowing), `helper` (a reusable building block: path and purpose). Each needs at least one entry or must be listed in `--none`. Never write "none" as an entry.
 - `--decision` text starts with `user:` or `agent:` to say who decided.
 - `--impact` lists other repos affected. `--commit` attaches commit hashes.
@@ -76,7 +76,7 @@ cairn amend n-4k7q2m --agent builder --model claude-opus-5-5 --status done \
 
 ## Set up and move data
 
-- `cairn init --name tidepool --repos server,client --context "Tide data service."` creates a project in the current folder (`--mode machine` keeps the database outside the folder). Only `init` creates a database.
+- `cairn init --name tidepool --repos server,client --context "Tide data service."` creates a project in the current folder (`--mode machine` keeps the database outside the folder). With a single repo it becomes the default repo automatically; with several, pick one using `--default-repo server`. Only `init` creates a database.
 - `cairn export --format json --out notes.json` and `cairn import notes.json` move notes between databases. Import validates every note and never changes existing data.
 - `cairn project move|add|remove` maintains the machine registry.
 

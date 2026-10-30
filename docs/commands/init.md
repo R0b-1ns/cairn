@@ -5,7 +5,7 @@ Creates a project: its database, and its entry in the machine registry. Only `in
 ## Usage
 
 ```
-cairn init --name NAME --repos REPO[,REPO...] [--mode project|machine] [--path DIR] [--context TEXT] [--task-pattern REGEX]
+cairn init --name NAME --repos REPO[,REPO...] [--mode project|machine] [--path DIR] [--context TEXT] [--default-repo REPO] [--task-pattern REGEX]
 ```
 
 ## Arguments
@@ -21,6 +21,7 @@ None. A positional argument gives exit code 2.
 | `--path` | (empty; the current directory) | an existing folder | Project root folder. |
 | `--context` | (empty) | text, up to 2000 characters, newlines allowed | A few lines describing the project. Shown by `cairn context`. |
 | `--repos` | (empty) | comma-separated names; each lowercase letters, digits, `.`, `-`, `_`, 1-40 characters; at most 50 | Allowed repo names. Required, at least one. |
+| `--default-repo` | (empty; the only repo when `--repos` lists exactly one) | one of the names in `--repos` | Repo that `cairn add` uses when `--repo` is omitted. Stored as the project key `default_repo`; refused with exit 3 if it is not in `--repos`. |
 | `--task-pattern` | `^(?P<base>[A-Z]{2,5}-\d{1,4})(?:\.(?P<ext>\d{1,3}))?$` | a regular expression with a named group `(?P<base>...)` and optionally `(?P<ext>...)`; at most 200 characters | The format every task ID must match. |
 
 `init` has no `--project` and no `--json` flag: it names the project itself.

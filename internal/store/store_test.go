@@ -361,7 +361,7 @@ func TestReplaceCannotRewriteHistory(t *testing.T) {
 	addAddendum(t, s, model.Addendum{NoteID: n.ID, At: "2026-10-30T11:00:00Z", Resolves: []string{open}})
 	db := rawDB(t, path)
 	stmts := map[string]string{
-		"project":             "INSERT OR REPLACE INTO project SELECT id,'hijacked',mode,context,repos,task_pattern FROM project",
+		"project":             "INSERT OR REPLACE INTO project SELECT id,'hijacked',mode,context,repos,default_repo,task_pattern FROM project",
 		"notes":               "INSERT OR REPLACE INTO notes SELECT id,agent,repo,at,task,task_base,task_ext,model,'REWRITTEN',status,none,impacts,commits FROM notes",
 		"entries":             "INSERT OR REPLACE INTO entries SELECT id,note_id,addendum_id,pos,type,'REWRITTEN',decided_by FROM entries",
 		"addenda":             "INSERT OR REPLACE INTO addenda SELECT id,note_id,'REWRITTEN',model,at,status FROM addenda",
@@ -384,5 +384,25 @@ func TestReplaceCannotRewriteHistory(t *testing.T) {
 	db.QueryRow("SELECT COUNT(*) FROM links").Scan(&links)
 	if links != 1 {
 		t.Fatalf("links = %d", links)
+	}
+}
+
+func TestProjectDefaultRepoRoundTrip(t *testing.T) {
+	p := testProject()
+	p.DefaultRepo = "client"
+	path := filepath.Join(t.TempDir(), ".cairn", "cairn.db")
+	s, err := Create(path, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	s, err = Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	got, _ := s.Project()
+	if got.DefaultRepo != "client" {
+		t.Fatalf("default repo = %q", got.DefaultRepo)
 	}
 }
