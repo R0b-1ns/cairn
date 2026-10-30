@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1](https://github.com/R0b-1ns/cairn/compare/v1.0.0...v1.0.1) (2026-10-30)
+
+
+### Bug Fixes
+
+* clean exported files and refuse to truncate a swapped or hard-linked file ([f7908a5](https://github.com/R0b-1ns/cairn/commit/f7908a551d139ce1f9980ae1ed4c9e35aa3d5a3d))
+* clean exported files and refuse to truncate swapped or hard-linked files ([a194ae4](https://github.com/R0b-1ns/cairn/commit/a194ae4ee0ac075f2cb78d29cb38c2354903b78f))
+
 ## 1.0.0 (2026-10-30)
 
 
