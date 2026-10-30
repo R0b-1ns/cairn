@@ -153,3 +153,32 @@ func TestSubjects(t *testing.T) {
 		t.Fatalf("addendum activity: %+v", subs)
 	}
 }
+
+func TestNoteHeaders(t *testing.T) {
+	s, _ := newStore(t)
+	sd := seed(t, s)
+	addAddendum(t, s, model.Addendum{NoteID: sd.note1, At: "2026-10-30T12:00:00Z", Status: model.StatusDone})
+	hs, err := s.NoteHeaders(NoteFilter{TaskBase: "TP-03"})
+	if err != nil || len(hs) != 2 {
+		t.Fatalf("%+v %v", hs, err)
+	}
+	// Oldest first; status is the current one, not the note's own.
+	if hs[0].ID != sd.note1 || hs[0].Status != model.StatusDone || hs[1].ID != sd.note2 || hs[1].Status != model.StatusInProgress {
+		t.Fatalf("headers: %+v", hs)
+	}
+	if hs[0].Title != "Add tidal index" || hs[0].Task != "TP-03" || hs[0].Repo != "server" || hs[1].Task != "TP-03.1" {
+		t.Fatalf("fields: %+v", hs)
+	}
+	if hs, _ = s.NoteHeaders(NoteFilter{Task: "TP-03.1"}); len(hs) != 1 || hs[0].ID != sd.note2 {
+		t.Fatalf("exact: %+v", hs)
+	}
+	if hs, _ = s.NoteHeaders(NoteFilter{ID: sd.note1}); len(hs) != 1 {
+		t.Fatalf("by id: %+v", hs)
+	}
+	if hs, _ = s.NoteHeaders(NoteFilter{TaskBase: "TP-99"}); len(hs) != 0 {
+		t.Fatalf("none expected: %+v", hs)
+	}
+	if hs, _ = s.NoteHeaders(NoteFilter{}); len(hs) != 2 {
+		t.Fatalf("no filter lists all: %+v", hs)
+	}
+}

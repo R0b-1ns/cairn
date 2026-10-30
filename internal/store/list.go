@@ -141,3 +141,38 @@ func (s *Store) Subjects(limit int) ([]Subject, error) {
 	}
 	return out, nil
 }
+
+// NoteFilter selects note headers; zero values mean "no constraint".
+type NoteFilter struct{ TaskBase, Task, ID string }
+
+// NoteHeader is a note without its entries; Status is the current status
+// (latest addendum carrying one, else the note's own).
+type NoteHeader struct {
+	ID, Task, Repo, Agent, Model, At, Title string
+	Status                                  model.Status
+}
+
+// NoteHeaders returns matching notes oldest first.
+func (s *Store) NoteHeaders(f NoteFilter) ([]NoteHeader, error) {
+	q := `SELECT n.id, n.task, n.repo, n.agent, n.model, n.at, n.title,
+		COALESCE((SELECT a.status FROM addenda a WHERE a.note_id = n.id AND a.status IS NOT NULL
+		          ORDER BY a.at DESC, a.rowid DESC LIMIT 1), n.status)
+		FROM notes n WHERE (? = '' OR n.task_base = ?) AND (? = '' OR n.task = ?) AND (? = '' OR n.id = ?)
+		ORDER BY n.at, n.rowid`
+	rows, err := s.db.Query(q, f.TaskBase, f.TaskBase, f.Task, f.Task, f.ID, f.ID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []NoteHeader
+	for rows.Next() {
+		var h NoteHeader
+		var st string
+		if err := rows.Scan(&h.ID, &h.Task, &h.Repo, &h.Agent, &h.Model, &h.At, &h.Title, &st); err != nil {
+			return nil, err
+		}
+		h.Status = model.Status(st)
+		out = append(out, h)
+	}
+	return out, rows.Err()
+}
