@@ -299,3 +299,7 @@ func contains(list []string, s string) bool {
 	}
 	return false
 }
+
+// ValidName reports whether s is an acceptable project name. Names become folder
+// names in the data directory, so path separators and dots are impossible.
+func ValidName(s string) bool { return nameRe.MatchString(s) }
