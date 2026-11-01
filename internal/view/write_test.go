@@ -506,10 +506,15 @@ const data = {header: "# p\n\n", notes: {"n-1": "## one\n\n", "n-2": "## two\n\n
     "e-3": {text: "use a tree", by: "agent", note: "n-1", agent: "a", closed: "superseded by a-1"}}};
 assert.strictEqual(app.notesMarkdown(data, ["n-2", "n-1"]), "# p\n\n## two\n\n## one\n\n");
 assert.strictEqual(app.notesMarkdown(data, []), "# p\n\n");
-assert.strictEqual(app.entriesMarkdown(data, ["e-1", "e-2"]),
-  "- ` + "`e-1`" + ` [user] use a hash (note n-1)\n- ` + "`e-2`" + ` run it (note n-2)\n");
-assert.strictEqual(app.entriesMarkdown(data, ["e-3"]),
-  "- ` + "`e-3`" + ` [agent] use a tree (note n-1)  (superseded by a-1)\n");
+assert.strictEqual(app.entriesMarkdown(data, ["e-1", "e-2"], "p — Decisions", "decisions"),
+  "# p — Decisions\n\n- ` + "`e-1`" + ` [user] use a hash (note n-1)\n- ` + "`e-2`" + ` run it (note n-2)\n");
+assert.strictEqual(app.entriesMarkdown(data, ["e-3"], "p — Decisions", "decisions"),
+  "# p — Decisions\n\n- ` + "`e-3`" + ` [agent] use a tree (note n-1)  (superseded by a-1)\n");
+// An empty view still says what it is and that nothing matched.
+assert.strictEqual(app.entriesMarkdown(data, [], "p — Open points", "open points"),
+  "# p — Open points\n\nNo matching open points.\n");
+assert.strictEqual(app.entriesMarkdown(data, ["e-missing"], "p — Helpers", "helpers"),
+  "# p — Helpers\n\nNo matching helpers.\n");
 // A base task selects itself and its extensions; an extension selects exactly itself.
 const base = {...row, task: "TP-03", taskBase: "TP-03"}, ext = {...row, task: "TP-03.1", taskBase: "TP-03"};
 assert.ok(app.matches(base, {...any, task: "TP-03", taskIsBase: true}));
@@ -622,6 +627,21 @@ func TestFilterOptionsArePerView(t *testing.T) {
 		got := strings.Join(selectOptions(t, readFile(t, dir, c.file), c.sel), ", ")
 		if got != c.want {
 			t.Errorf("%s %s:\n got %s\nwant %s", c.file, c.sel, got, c.want)
+		}
+	}
+}
+
+// The download of an entry view is titled with the project and the view, and
+// says "No matching <noun>." when nothing is shown; app.js reads both from the button.
+func TestEntryViewDownloadNamesTheView(t *testing.T) {
+	dir := writeSite(t, sampleSite())
+	for file, want := range map[string]string{
+		"decisions.html":   `data-file="decisions.md" data-title="tidepool — Decisions" data-noun="decisions"`,
+		"open-points.html": `data-file="open-points.md" data-title="tidepool — Open points" data-noun="open points"`,
+		"helpers.html":     `data-file="helpers.md" data-title="tidepool — Helpers" data-noun="helpers"`,
+	} {
+		if page := readFile(t, dir, file); !strings.Contains(page, want) {
+			t.Errorf("%s lacks %s", file, want)
 		}
 	}
 }

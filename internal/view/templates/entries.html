@@ -2,7 +2,7 @@
 <header class="head">
 <h1>{{.Title}}</h1>
 <p class="tools"><span id="count" class="count"></span>
-<button type="button" id="download-view" data-file="{{.Content.Download}}">Download this view as Markdown</button></p>
+<button type="button" id="download-view" data-file="{{.Content.Download}}" data-title="{{.Project}} — {{.Title}}" data-noun="{{.Content.Noun}}">Download this view as Markdown</button></p>
 </header>
 {{- if .Content.Rows}}
 <div class="table-wrap">

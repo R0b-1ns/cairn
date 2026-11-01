@@ -35,17 +35,21 @@
     return out;
   }
 
-  // entriesMarkdown is a Markdown list: - `e-id` [by] text (note n-id), then "  (superseded by id)"
-  // or "  (resolved by id)" for a closed entry, as in `cairn list`.
-  function entriesMarkdown(data, ids) {
-    var out = "";
+  // entriesMarkdown is "# <title>", then a Markdown list: - `e-id` [by] text (note n-id), then
+  // "  (superseded by id)" or "  (resolved by id)" for a closed entry, as in `cairn list`.
+  // With no entry it says "No matching <noun>.".
+  function entriesMarkdown(data, ids, title, noun) {
+    var out = "# " + title + "\n\n";
+    var listed = 0;
     for (var i = 0; i < ids.length; i++) {
       var e = data.entries[ids[i]];
       if (!e) continue;
+      listed++;
       var text = String(e.text).replace(/\s*\n\s*/g, " ");
       out += "- `" + ids[i] + "` " + (e.by ? "[" + e.by + "] " : "") + text + " (note " + e.note + ")" +
         (e.closed ? "  (" + e.closed + ")" : "") + "\n";
     }
+    if (listed === 0) out += "No matching " + noun + ".\n";
     return out;
   }
 
@@ -189,7 +193,8 @@
     download.addEventListener("click", function () {
       var data = window.CAIRN || { header: "", notes: {}, entries: {} };
       var ids = visibleIds();
-      var text = isNotes ? notesMarkdown(data, ids) : entriesMarkdown(data, ids);
+      var text = isNotes ? notesMarkdown(data, ids)
+        : entriesMarkdown(data, ids, download.dataset.title || "", download.dataset.noun || "entries");
       save(download.dataset.file || "cairn.md", text);
     });
   }
