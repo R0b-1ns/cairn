@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/R0b-1ns/cairn/internal/model"
 )
 
 // secondProject returns a fresh machine with an empty tidepool project.
@@ -229,5 +231,47 @@ func TestImportBadLinksAndMissingIDs(t *testing.T) {
 func TestImportNoProject(t *testing.T) {
 	if r := newEnv(t).run("import", "-"); r.code != ExitNoProject {
 		t.Fatalf("%+v", r)
+	}
+}
+
+func exportFx(t *testing.T) childFixture {
+	f := newChildFixture(t, true)
+	putNote(t, f.e.root, model.Note{Repo: "server", Task: "TP-01", At: "2026-10-01T10:00:00Z", Title: "Parent topaz", Entries: chg("parent change")})
+	putNote(t, f.child, model.Note{Repo: "web", Task: "TP-07", At: "2026-10-02T10:00:00Z", Title: "Child topaz", Entries: chg("child change")})
+	return f
+}
+
+func TestExportMarkdownIncludesChildren(t *testing.T) {
+	f := exportFx(t)
+	r := f.e.mustRun("export")
+	if r.err != "" {
+		t.Fatalf("stderr %q", r.err)
+	}
+	ip, ih, ic := strings.Index(r.out, "Parent topaz"), strings.Index(r.out, "\n# child: web\n"), strings.Index(r.out, "Child topaz")
+	if ip < 0 || ih < ip || ic < ih || !strings.HasPrefix(r.out, "# tidepool\n") {
+		t.Fatalf("order/heading:\n%s", r.out)
+	}
+	r = f.e.mustRun("export", "--task", "TP-07")
+	if strings.Contains(r.out, "Parent topaz") || !strings.Contains(r.out, "Child topaz") {
+		t.Fatalf("--task:\n%s", r.out)
+	}
+}
+
+func TestExportJSONStaysCurrentProject(t *testing.T) {
+	f := exportFx(t)
+	// the child database is unreadable: JSON export must not even open it
+	if err := os.WriteFile(filepath.Join(f.child, ".cairn", "cairn.db"), []byte("not a database"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r := f.e.mustRun("export", "--format", "json")
+	if r.err != "" || strings.Contains(r.out, "Child topaz") || !strings.Contains(r.out, "Parent topaz") {
+		t.Fatalf("%+v", r)
+	}
+	var doc exportDoc
+	if err := json.Unmarshal([]byte(r.out), &doc); err != nil || len(doc.Notes) != 1 {
+		t.Fatalf("%v %s", err, r.out)
+	}
+	if !strings.Contains(readDoc(t, "commands/export.md"), "stays on the current project") {
+		t.Fatal("docs must say JSON export stays on the current project")
 	}
 }

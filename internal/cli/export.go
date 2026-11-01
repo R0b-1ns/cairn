@@ -54,40 +54,65 @@ func defineExport(fs *flag.FlagSet) Handler {
 			return code
 		}
 		defer s.Close()
-		var nf store.NoteFilter
-		if task != "" {
-			flt, ok := taskFilter(s.Proj, task)
-			if !ok {
-				return fail(c, ExitUsage, "%q does not match the task pattern %s", task, s.Proj.TaskPattern)
-			}
-			nf = store.NoteFilter{TaskBase: flt.TaskBase, Task: flt.Task}
+		// JSON stays on the current project so it remains importable; only the
+		// Markdown reads the local children.
+		sources := []source{{St: s.St, Proj: s.Proj}}
+		if format == "md" {
+			sc := openScope(c, s)
+			defer sc.Close()
+			sources = sc.Sources
 		}
-		doc := exportDoc{Format: exportFormat, Version: exportVersion, Project: s.Proj, Notes: []model.Note{}, Addenda: []model.Addendum{}}
-		hs, err := s.St.NoteHeaders(nf)
-		if err != nil {
-			return fail(c, ExitRuntime, "%v", err)
+		type part struct {
+			src source
+			doc exportDoc
 		}
-		for _, h := range hs {
-			n, err := s.St.GetNote(h.ID)
-			if err == nil {
-				var as []model.Addendum
-				if as, err = s.St.Addenda(h.ID); err == nil {
-					doc.Notes = append(doc.Notes, n)
-					doc.Addenda = append(doc.Addenda, as...)
+		var parts []part
+		for _, src := range sources {
+			var nf store.NoteFilter
+			if task != "" {
+				flt, ok := taskFilter(src.Proj, task)
+				if !ok {
+					continue // this source numbers its tasks differently
 				}
+				nf = store.NoteFilter{TaskBase: flt.TaskBase, Task: flt.Task}
 			}
+			doc, err := collectExport(src, nf)
 			if err != nil {
 				return fail(c, ExitRuntime, "%v", err)
 			}
+			parts = append(parts, part{src, doc})
+		}
+		if len(parts) == 0 {
+			return fail(c, ExitUsage, "%q does not match the task pattern %s", task, s.Proj.TaskPattern)
+		}
+		count := 0
+		for _, p := range parts {
+			count += len(p.doc.Notes)
 		}
 		var body string
+		var err error
 		if format == "json" {
 			var sb strings.Builder
 			w := &Ctx{Stdout: &sb}
-			printJSON(w, doc)
+			printJSON(w, parts[0].doc)
 			body = sb.String()
-		} else if body, err = renderMarkdown(s, doc); err != nil {
-			return fail(c, ExitRuntime, "%v", err)
+		} else {
+			var b strings.Builder
+			for _, p := range parts {
+				ps := &session{St: p.src.St, Proj: p.src.Proj, Reg: s.Reg, Loc: s.Loc}
+				var md string
+				if p.src.Child == "" {
+					md, err = renderMarkdown(ps, p.doc)
+				} else {
+					b.WriteString("# child: " + sanitize(p.src.Child) + "\n\n")
+					md, err = renderMarkdownNotes(ps, p.doc)
+				}
+				if err != nil {
+					return fail(c, ExitRuntime, "%v", err)
+				}
+				b.WriteString(md)
+			}
+			body = b.String()
 		}
 		// A file is read later by tools that do not filter terminal output, so the
 		// whole body is cleaned here, whatever the database contained.
@@ -99,7 +124,7 @@ func defineExport(fs *flag.FlagSet) Handler {
 		if err := writeNew(out, body, force); err != nil {
 			return fail(c, ExitRuntime, "%v", err)
 		}
-		fmt.Fprintf(c.Stdout, "exported %d note(s) to %s\n", len(doc.Notes), out)
+		fmt.Fprintf(c.Stdout, "exported %d note(s) to %s\n", count, out)
 		return ExitOK
 	}
 }
@@ -144,6 +169,28 @@ func writeNew(path, body string, force bool) error {
 	}
 	_, err = io.WriteString(fh, body)
 	return err
+}
+
+// collectExport reads the notes and addenda of one source.
+func collectExport(src source, nf store.NoteFilter) (exportDoc, error) {
+	doc := exportDoc{Format: exportFormat, Version: exportVersion, Project: src.Proj, Notes: []model.Note{}, Addenda: []model.Addendum{}}
+	hs, err := src.St.NoteHeaders(nf)
+	if err != nil {
+		return doc, err
+	}
+	for _, h := range hs {
+		n, err := src.St.GetNote(h.ID)
+		if err != nil {
+			return doc, err
+		}
+		as, err := src.St.Addenda(h.ID)
+		if err != nil {
+			return doc, err
+		}
+		doc.Notes = append(doc.Notes, n)
+		doc.Addenda = append(doc.Addenda, as...)
+	}
+	return doc, nil
 }
 
 func renderMarkdown(s *session, doc exportDoc) (string, error) {

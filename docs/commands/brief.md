@@ -45,6 +45,8 @@ open points:
 
 The `refs:` line lists every `ref` stored on the notes and addenda of the task and its extensions, newest first, separated by `, `. When none is stored and the project has a ticket URL (set at `init` with `--task-url`), it shows the link computed from the task instead. With neither, the line is not printed. A note line ends with a compact origin, ` by Name on branch`, when the note has an author or a branch: the name only, or the email when there is no name (` by ada@example.org on main` when only the email is stored), never both, to keep the output short; `show` and `export` print the full `by Name <email> on branch`. Empty parts are left out, and a note with neither adds nothing.
 
+Local children: when the project has local children (`cairn project link`), the notes, changes, decisions in force and open points of each child are merged after those of the current project, and each line from a child ends with `  [<child>]` (after the origin text on note lines). A child is read, never written: the direction is parent to child only, so a child project never shows its parent's notes. The task ID is matched with the task pattern of each project on its own; a project whose pattern does not accept it contributes nothing and prints nothing, and the usage error (exit 2) applies only when no project accepts it. `--max` caps each section after merging, and the `... N more` count includes child items. A child that cannot be read is skipped with a warning on standard error that starts with `cairn: ` and names the command to run (`cairn project link --project <parent> <child> <path>`); the exit code does not change.
+
 Sections are in this order: `notes` (oldest first), `changes` (oldest first), `decisions in force`, `open points`. An empty section prints `  none`. A change or open point taken from an addendum shows `(n-4k7q2m via a-9x3b2c)`. A task without notes prints `no notes for task TP-09`.
 
 `--json` prints one object with the keys `task`, `notes`, `changes`, `decisions`, `open`, and the totals `notes_total`, `changes_total`, `decisions_total`, `open_total`, plus `refs` when there is at least one: an array of the same links as the `refs:` line (every stored `ref` of the task, newest first, each once, or the computed link when none is stored). `refs` is omitted when empty. Each list is capped by `--max`; the totals count everything that matched, so a consumer can tell when a list was cut.
@@ -52,7 +54,7 @@ Sections are in this order: `notes` (oldest first), `changes` (oldest first), `d
 - `notes`: objects with the keys `id`, `task`, `repo`, `agent`, `model`, `at`, `title`, `status` (the current status), and, when not empty, `branch`, `author_name`, `author_email`, `ref`.
 - `changes`, `decisions`, `open`: entry objects with `id`, `type`, `text`, `by`, `note_id`, `addendum_id`, `task`, `repo`, `at`, `closed`, `closed_by`, `closed_at`.
 
-Empty lists are `[]`, never `null`.
+Empty lists are `[]`, never `null`. Items from a local child carry a `child` key with the child name; items of the current project have no `child` key. When the project has at least one link, the object also has `missing_children`: an array of the names of the local children that could not be read (`[]` when all were read). A project without links prints no `missing_children` key.
 
 ## Exit codes
 

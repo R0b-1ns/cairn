@@ -21,7 +21,9 @@ func putNote(t *testing.T, root string, n model.Note) model.Note {
 	if n.Agent == "" {
 		n.Agent, n.Model, n.Status = "builder", "claude-test", model.StatusDone
 	}
-	n.None = []model.EntryType{model.TypeDecision, model.TypeOpen, model.TypeNote, model.TypeHelper}
+	if n.None == nil {
+		n.None = []model.EntryType{model.TypeDecision, model.TypeOpen, model.TypeNote, model.TypeHelper}
+	}
 	out, err := st.InsertNote(n)
 	if err != nil {
 		t.Fatal(err)

@@ -61,9 +61,11 @@ none: note, helper
 - resolves: e-5c8r0t
 ```
 
+For a project with local children (`cairn project link`), the Markdown has the notes of the current project exactly as above, then, for each child, a heading `# child: <name>` followed by that child's notes in the same layout. A child that cannot be read is skipped with a warning on standard error that starts with `cairn: ` and names the command to run (`cairn project link --project <parent> <child> <path>`); the exit code does not change. Children are read only, never written (parent to child only). `--task` is matched with the task pattern of each project on its own, and a project whose pattern does not accept it contributes nothing; the usage error (exit 2) applies only when no project accepts it. With `--out`, the line `exported N note(s)` counts the notes of all the projects read.
+
 Markdown is for reading; it is not meant to be imported. The `by ...` line (empty parts left out) and the `ref:` line of a note appear after its metadata line, and only when set; an addendum shows them as list items under its heading. Only the `ref` stored on that note or addendum is printed, not a link computed from the project's ticket URL.
 
-With `--format json` the document is an object with `format` (always `cairn-export`), `version` (`1`), `project` (the project configuration), `notes` (full notes with their IDs) and `addenda` (full addenda with their IDs), indented by two spaces.
+`--format json` stays on the current project: it never opens a child and never prints a child warning, so the file stays importable and faithful to that one database. With `--format json` the document is an object with `format` (always `cairn-export`), `version` (`1`), `project` (the project configuration), `notes` (full notes with their IDs) and `addenda` (full addenda with their IDs), indented by two spaces.
 
 With `--out`, standard output shows one line: `exported 3 note(s) to /work/tidepool-notes.json`.
 
@@ -96,6 +98,7 @@ Replaces the existing regular file with the new export. Exit code 0. Without `--
 
 ## Notes
 
+- `--format json` stays on the current project and never includes the notes of local children. To move a child's notes, run the export inside the child.
 - Use `--format json` to move notes: `cairn import` accepts only that format.
 - `--out` never follows a symbolic link. It replaces a file only with `--force`, and only when the existing path is a regular file.
 - JSON notes and addenda carry `author_name`, `author_email`, `branch` and `ref` when they are set; `cairn import` restores them.
