@@ -36,9 +36,10 @@ type stmtExecer interface {
 	Exec(query string, args ...any) (sql.Result, error)
 }
 
-// buildSchema creates the current schema: the version 3 baseline, the triggers,
-// then every migration, so a fresh database equals a migrated one.
-func buildSchema(db stmtExecer) error {
+// buildSchema creates the schema of the given version: the version 3 baseline,
+// the triggers, then every migration below version, so a fresh database equals
+// a migrated one.
+func buildSchema(db stmtExecer, version int) error {
 	if _, err := db.Exec(tableSQLv3); err != nil {
 		return err
 	}
@@ -48,6 +49,9 @@ func buildSchema(db stmtExecer) error {
 		}
 	}
 	for _, m := range migrations {
+		if m.from >= version {
+			continue
+		}
 		if _, err := db.Exec(m.sql); err != nil {
 			return err
 		}
@@ -76,6 +80,10 @@ func (s *Store) migrate() error {
 	}
 	if _, ok := migrationFrom(v); !ok {
 		return nil
+	}
+	// Refuse a hostile or corrupt old database before touching it or copying it.
+	if err := s.verifyShape(v); err != nil {
+		return err
 	}
 	tx, err := s.db.Begin() // BEGIN IMMEDIATE
 	if err != nil {

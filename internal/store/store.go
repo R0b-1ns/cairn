@@ -74,7 +74,7 @@ func (s *Store) init(p model.Project) error {
 		return err
 	}
 	defer tx.Rollback()
-	if err := buildSchema(tx); err != nil {
+	if err := buildSchema(tx, SchemaVersion); err != nil {
 		return err
 	}
 	repos, _ := json.Marshal(p.Repos)
@@ -123,6 +123,12 @@ func (s *Store) verify() error {
 	if v != SchemaVersion {
 		return fmt.Errorf("unsupported database version %d (this build supports %d)", v, SchemaVersion)
 	}
+	return s.verifyShape(v)
+}
+
+// verifyShape checks integrity, triggers and the exact schema of a database
+// claimed to be at schema version v.
+func (s *Store) verifyShape(v int) error {
 	var check string
 	if err := s.db.QueryRow("PRAGMA quick_check(1)").Scan(&check); err != nil || check != "ok" {
 		return fmt.Errorf("database integrity check failed: %v %s", err, check)
@@ -152,7 +158,7 @@ func (s *Store) verify() error {
 			return fmt.Errorf("immutability trigger %s was altered: database refused", name)
 		}
 	}
-	if err := s.verifySchema(); err != nil {
+	if err := s.verifySchema(v); err != nil {
 		return err
 	}
 	var n int
@@ -180,15 +186,16 @@ func schemaObjects(db *sql.DB) (map[string]string, error) {
 	return out, rows.Err()
 }
 
-// expectedSchema builds the reference schema in memory from the same SQL used by Create.
-func expectedSchema() (map[string]string, error) {
+// expectedSchema builds the reference schema of the given version in memory from
+// the same SQL used by Create: the baseline plus every migration below version.
+func expectedSchema(version int) (map[string]string, error) {
 	db, err := sql.Open("sqlite", "file::memory:")
 	if err != nil {
 		return nil, err
 	}
 	defer db.Close()
 	db.SetMaxOpenConns(1)
-	if err := buildSchema(db); err != nil {
+	if err := buildSchema(db, version); err != nil {
 		return nil, err
 	}
 	return schemaObjects(db)
@@ -196,8 +203,8 @@ func expectedSchema() (map[string]string, error) {
 
 // verifySchema refuses a database whose schema differs in any way from ours:
 // extra or missing tables, indexes, views or triggers, or altered definitions.
-func (s *Store) verifySchema() error {
-	want, err := expectedSchema()
+func (s *Store) verifySchema(version int) error {
+	want, err := expectedSchema(version)
 	if err != nil {
 		return err
 	}

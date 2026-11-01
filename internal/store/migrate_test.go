@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -88,7 +89,7 @@ func TestMigrateV3ToV4(t *testing.T) {
 	if v := userVersion(t, bak); v != 3 {
 		t.Fatalf("backup user_version = %d, want 3", v)
 	}
-	if err := s.verifySchema(); err != nil {
+	if err := s.verifySchema(SchemaVersion); err != nil {
 		t.Fatalf("migrated schema must equal a fresh one: %v", err)
 	}
 }
@@ -157,5 +158,106 @@ func TestOldVersionStillRefused(t *testing.T) {
 	_, err := Open(path)
 	if err == nil || !strings.Contains(err.Error(), "unsupported database version 2 (this build supports 4)") {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestHostileV3IsRefusedUnchanged(t *testing.T) {
+	cases := map[string]string{
+		"altered trigger": "DROP TRIGGER notes_no_update; CREATE TRIGGER notes_no_update BEFORE UPDATE ON notes BEGIN SELECT 1; END",
+		"extra table":     "CREATE TABLE evil(x)",
+	}
+	for name, stmt := range cases {
+		t.Run(name, func(t *testing.T) {
+			path := makeV3(t)
+			db := rawDB(t, path)
+			if _, err := db.Exec(stmt); err != nil {
+				t.Fatal(err)
+			}
+			db.Close()
+			before, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Open(path); err == nil {
+				t.Fatal("hostile version 3 database must be refused")
+			}
+			after, _ := os.ReadFile(path)
+			if !bytes.Equal(before, after) {
+				t.Fatal("refused database was modified")
+			}
+			if _, err := os.Stat(path + ".v3.bak"); err == nil {
+				t.Fatal("no backup may be made for a refused database")
+			}
+		})
+	}
+}
+
+func TestExistingBackupIsOverwritten(t *testing.T) {
+	path := makeV3(t)
+	if err := os.WriteFile(path+".v3.bak", []byte("stale"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	if v := userVersion(t, path+".v3.bak"); v != 3 {
+		t.Fatalf("backup user_version = %d, want 3", v)
+	}
+}
+
+func TestV4DatabaseMakesNoBackup(t *testing.T) {
+	s, path := newStore(t)
+	s.Close()
+	s2, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s2.Close()
+	if _, err := os.Stat(path + ".v3.bak"); err == nil {
+		t.Fatal("a current database must not be backed up")
+	}
+}
+
+func TestMigrateKeepsEntriesAddendaAndSearch(t *testing.T) {
+	path := makeV3(t)
+	db := rawDB(t, path)
+	for _, q := range []string{
+		`INSERT INTO entries(id,note_id,addendum_id,pos,type,text,decided_by) VALUES ('e-aaaaaa','n-old',NULL,0,'change','Wrote the zebra index.','')`,
+		`INSERT INTO addenda(id,note_id,agent,model,at,status) VALUES ('a-bbbbbb','n-old','a','m','2026-10-30T11:00:00Z','done')`,
+		`INSERT INTO entries(id,note_id,addendum_id,pos,type,text,decided_by) VALUES ('e-cccccc',NULL,'a-bbbbbb',0,'note','Follow-up giraffe remark.','')`,
+		`INSERT INTO search(text,kind,id,note_id) VALUES ('Wrote the zebra index.','entry','e-aaaaaa','n-old')`,
+		`INSERT INTO search(text,kind,id,note_id) VALUES ('Follow-up giraffe remark.','entry','e-cccccc','n-old')`,
+	} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db.Close()
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	n, err := s.GetNote("n-old")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n.Title != "Old note" || len(n.Entries) != 1 || n.Entries[0].Text != "Wrote the zebra index." {
+		t.Fatalf("note read back wrong: %+v", n)
+	}
+	a, err := s.GetAddendum("a-bbbbbb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.NoteID != "n-old" || len(a.Entries) != 1 || a.Entries[0].Text != "Follow-up giraffe remark." {
+		t.Fatalf("addendum read back wrong: %+v", a)
+	}
+	for _, term := range []string{"zebra", "giraffe"} {
+		hits, _, err := s.Search([]string{term}, 10)
+		if err != nil || len(hits) == 0 {
+			t.Fatalf("search %q: hits=%v err=%v", term, hits, err)
+		}
 	}
 }

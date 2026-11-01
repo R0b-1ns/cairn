@@ -28,11 +28,11 @@ The JSON shapes cairn reads and writes. Used by `cairn add --stdin`, `cairn amen
 | `commits` | array of strings | no | Lowercase hex, 7-64 characters; at most 50 items | Commit hashes. |
 | `resolves` | array of strings | no | Entry IDs `e-...` of `open` entries; at most 50 items | Open entries this note closes. |
 | `supersedes` | array of strings | no | Entry IDs `e-...` of `decision` entries; at most 50 items | Decisions this note replaces. |
-| `author_name` | string | no | One line, no control characters | At most 80 characters | Who wrote the note. Stored since schema version 4. |
-| `author_email` | string | no | One line, no control characters | At most 120 characters | Email of the author. Stored since schema version 4. |
-| `branch` | string | no | One line, no control characters | At most 200 characters | Branch the work was done on. Stored since schema version 4. |
-| `ref` | string | no | Starts with `http://` or `https://` | At most 500 characters | Link to the ticket. Stored since schema version 4. |
-| `new_task` | boolean | no | `true` or `false` | Input only | Asks for the next task number. Never stored. |
+| `author_name` | string | no | One line, no control characters; at most 80 characters | Who wrote the note. Stored since schema version 4. |
+| `author_email` | string | no | One line, no control characters; at most 120 characters | Email of the author. Stored since schema version 4. |
+| `branch` | string | no | One line, no control characters; at most 200 characters | Branch the work was done on. Stored since schema version 4. |
+| `ref` | string | no | Starts with `http://` or `https://`; at most 500 characters | Link to the ticket. Stored since schema version 4. |
+| `new_task` | boolean | no | `true` or `false`; input only | Asks for the next task number. Never stored. |
 
 Refused on `add`:
 
@@ -79,10 +79,10 @@ cairn add --stdin --project tidepool < note.json
 | `entries` | array of entry objects | no | 0-100 items | Content of the addendum. |
 | `resolves` | array of strings | no | Entry IDs `e-...` of `open` entries; at most 50 items | Open entries, in any note, this addendum closes. |
 | `supersedes` | array of strings | no | Entry IDs `e-...` of `decision` entries; at most 50 items | Decisions, in any note, this addendum replaces. |
-| `author_name` | string | no | One line, no control characters | At most 80 characters | Who wrote the addendum. Stored since schema version 4. |
-| `author_email` | string | no | One line, no control characters | At most 120 characters | Email of the author. Stored since schema version 4. |
-| `branch` | string | no | One line, no control characters | At most 200 characters | Branch the work was done on. Stored since schema version 4. |
-| `ref` | string | no | Starts with `http://` or `https://` | At most 500 characters | Link to the ticket. Stored since schema version 4. |
+| `author_name` | string | no | One line, no control characters; at most 80 characters | Who wrote the addendum. Stored since schema version 4. |
+| `author_email` | string | no | One line, no control characters; at most 120 characters | Email of the author. Stored since schema version 4. |
+| `branch` | string | no | One line, no control characters; at most 200 characters | Branch the work was done on. Stored since schema version 4. |
+| `ref` | string | no | Starts with `http://` or `https://`; at most 500 characters | Link to the ticket. Stored since schema version 4. |
 
 The addendum must carry at least one of: `entries`, `status`, `resolves`, `supersedes`. Otherwise: `addendum: is empty`.
 
