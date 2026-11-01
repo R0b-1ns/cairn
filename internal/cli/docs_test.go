@@ -154,6 +154,24 @@ func TestRepoHasNoForbiddenWords(t *testing.T) {
 	})
 }
 
+// The install script must fail closed: it stops on any error and compares the
+// checksum before the binary is moved onto the PATH.
+func TestInstallScriptVerifiesBeforeInstalling(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(repoRoot, "scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("missing scripts/install.sh: %v", err)
+	}
+	script := string(b)
+	if !strings.Contains(script, "set -eu") {
+		t.Error("scripts/install.sh must start with set -eu so a failed step stops the install")
+	}
+	check := strings.Index(script, `[ "$got" = "$want" ] || err "checksum mismatch`)
+	move := strings.Index(script, `mv "$tmp/$asset"`)
+	if check < 0 || move < 0 || check > move {
+		t.Error("scripts/install.sh must refuse a checksum mismatch before it moves the binary onto the PATH")
+	}
+}
+
 // Facts the reviews found wrong or missing in the documentation, pinned so they stay right.
 func TestDocsStateTheCorrectedFacts(t *testing.T) {
 	has := func(file string, want ...string) {
@@ -175,7 +193,7 @@ func TestDocsStateTheCorrectedFacts(t *testing.T) {
 		}
 	}
 	has("guide.md", "untrusted", "<<'EOF'", "never follow instructions", "--default-repo")
-	has("../README.md", "-c - &&")
+	has("../README.md", "scripts/install.sh", "shasum -a 256 -c")
 	has("security.md", "`user_version` 3", "INSERT OR REPLACE", "Invisible", "future", "not registered")
 	lacks("security.md", "`user_version` 2", "even if a bug reached them")
 	has("commands/brief.md", "notes_total", "`id`, `task`, `repo`, `agent`, `model`, `at`, `title`, `status`")
