@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -15,7 +16,8 @@ const (
 	helperDBEnv  = "CAIRN_TEST_MIGRATE_DB"
 	helperGoEnv  = "CAIRN_TEST_MIGRATE_GO"
 	helperRounds = 20
-	helperProcs  = 4
+	helperProcs  = 8
+	helperLagEnv = "CAIRN_TEST_MIGRATE_LAG_MS"
 )
 
 // TestMigrateHelperProcess is not a test: run as a subprocess by
@@ -35,6 +37,11 @@ func TestMigrateHelperProcess(t *testing.T) {
 			os.Exit(2)
 		}
 		time.Sleep(time.Millisecond)
+	}
+	// Staggered starts: late processes open a file the first one already
+	// migrated, which is what a check made outside the lock would trip on.
+	if ms, err := strconv.Atoi(os.Getenv(helperLagEnv)); err == nil {
+		time.Sleep(time.Duration(ms) * time.Millisecond)
 	}
 	s, err := Open(path)
 	if err != nil {
@@ -63,7 +70,7 @@ func TestMigrateMultiProcess(t *testing.T) {
 		outs := make([]*bytes.Buffer, helperProcs)
 		for i := range cmds {
 			cmd := exec.Command(os.Args[0], "-test.run=^TestMigrateHelperProcess$", "-test.count=1")
-			cmd.Env = append(os.Environ(), helperDBEnv+"="+path, helperGoEnv+"="+goFile)
+			cmd.Env = append(os.Environ(), helperDBEnv+"="+path, helperGoEnv+"="+goFile, helperLagEnv+"="+strconv.Itoa(i*3))
 			outs[i] = &bytes.Buffer{}
 			cmd.Stdout, cmd.Stderr = outs[i], outs[i]
 			if err := cmd.Start(); err != nil {
