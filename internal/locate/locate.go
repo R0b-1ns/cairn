@@ -29,6 +29,7 @@ type Location struct {
 	Attached  bool
 	Repo      string // the child's repo name
 	ChildRoot string // folder holding the child's pointer
+	ParentID  string // parent_id recorded in the child's pointer (may be empty)
 }
 
 // uidFunc returns the effective user ID; tests replace it.
@@ -246,7 +247,7 @@ func fromPointer(reg *registry.Registry, childRoot string, p Pointer) (Location,
 	if err != nil {
 		return Location{}, err
 	}
-	loc.Attached, loc.Repo, loc.ChildRoot = true, p.Repo, childRoot
+	loc.Attached, loc.Repo, loc.ChildRoot, loc.ParentID = true, p.Repo, childRoot, p.ParentID
 	return loc, nil
 }
 

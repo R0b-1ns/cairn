@@ -151,8 +151,14 @@ func defineInit(fs *flag.FlagSet) Handler {
 		if err != nil {
 			return fail(c, ExitRuntime, "%v", err)
 		}
+		id, err := st.EnsureProjectID()
 		st.Close()
-		if err := reg.Register(registry.Entry{Name: p.Name, Mode: p.Mode, Path: root}); err != nil {
+		if err != nil {
+			os.Remove(dbPath)
+			os.Remove(filepath.Dir(dbPath))
+			return fail(c, ExitRuntime, "%v", err)
+		}
+		if err := reg.Register(registry.Entry{Name: p.Name, Mode: p.Mode, Path: root, ID: id}); err != nil {
 			os.Remove(dbPath)
 			os.Remove(filepath.Dir(dbPath))
 			return fail(c, ExitRuntime, "%v", err)
@@ -359,6 +365,10 @@ func defineProjectAdd(fs *flag.FlagSet) Handler {
 			return fail(c, ExitRuntime, "%v", err)
 		}
 		p, err := st.Project()
+		var ls store.LinkState
+		if err == nil {
+			ls, err = st.Links()
+		}
 		st.Close()
 		if err != nil {
 			return fail(c, ExitRuntime, "%v", err)
@@ -370,10 +380,13 @@ func defineProjectAdd(fs *flag.FlagSet) Handler {
 		if err != nil {
 			return fail(c, ExitRuntime, "%v", err)
 		}
-		if err := reg.Register(registry.Entry{Name: p.Name, Mode: model.ModeProject, Path: root}); err != nil {
+		if err := reg.Register(registry.Entry{Name: p.Name, Mode: model.ModeProject, Path: root, ID: ls.ID}); err != nil {
 			return regErr(c, err)
 		}
 		fmt.Fprintf(c.Stdout, "registered %s at %s\n", p.Name, root)
+		for _, ch := range ls.Children {
+			fmt.Fprintf(c.Stdout, "no path known for child %s; run: cairn project link %s <path>\n", ch.Name, ch.Name)
+		}
 		return ExitOK
 	}
 }

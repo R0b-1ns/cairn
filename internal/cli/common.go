@@ -49,6 +49,7 @@ type session struct {
 	St   *store.Store
 	Proj model.Project
 	Reg  *registry.Registry
+	Loc  locate.Location
 }
 
 func (s *session) Close() { s.St.Close() }
@@ -94,7 +95,30 @@ func openProject(c *Ctx, projectFlag string) (*session, int) {
 		st.Close()
 		return nil, fail(c, ExitRuntime, "%v", err)
 	}
-	return &session{St: st, Proj: p, Reg: reg}, ExitOK
+	if loc.Attached {
+		p.DefaultRepo = loc.Repo // in memory only: the database is not changed
+	}
+	warnIDMismatch(c, reg, loc, st)
+	return &session{St: st, Proj: p, Reg: reg, Loc: loc}, ExitOK
+}
+
+// warnIDMismatch prints warnings (never errors) when a recorded project id
+// differs from the one in the database. Ids are compared only when both are known.
+func warnIDMismatch(c *Ctx, reg *registry.Registry, loc locate.Location, st *store.Store) {
+	ls, err := st.Links()
+	if err != nil || ls.ID == "" {
+		return
+	}
+	if loc.Name != "" {
+		if e, err := reg.Get(loc.Name); err == nil && e.ID != "" && e.ID != ls.ID {
+			fmt.Fprintf(c.Stderr, "cairn: warning: the registry knows project %q with id %s, but the database at %s has id %s; it may be a different project; run: cairn project remove %s, then: cairn project add %s\n",
+				loc.Name, e.ID, loc.Root, ls.ID, loc.Name, loc.Root)
+		}
+	}
+	if loc.Attached && loc.ParentID != "" && loc.ParentID != ls.ID {
+		fmt.Fprintf(c.Stderr, "cairn: warning: the repo at %s points to parent %q with id %s, but the registered project %q has id %s; check that %s is the right project\n",
+			loc.ChildRoot, loc.Name, loc.ParentID, loc.Name, ls.ID, loc.Name)
+	}
 }
 
 func isNoProject(err error) bool { return errors.Is(err, locate.ErrNoProject) }
