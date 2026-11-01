@@ -111,7 +111,10 @@ func TestBriefComputedLinkWhenNoRef(t *testing.T) {
 	}
 }
 
-func TestBriefLegacyByteIdentical(t *testing.T) {
+// TestBriefWithoutProvenanceOmitsKeys checks a project without authors,
+// branches or refs. Byte identity with the old build on a migrated project is
+// checked against golden files by TestLegacyOutputGolden (internal/store).
+func TestBriefWithoutProvenanceOmitsKeys(t *testing.T) {
 	isolateGit(t)
 	e, _ := newBriefFixture(t)
 	out := e.mustRun("brief", "TP-03").out

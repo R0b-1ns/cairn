@@ -1,0 +1,19 @@
+0
+[
+  {
+    "kind": "entry",
+    "id": "e-0aaaa3",
+    "note_id": "n-0aaaaa",
+    "addendum_id": "",
+    "type": "open",
+    "text": "Which station is the reference?"
+  },
+  {
+    "kind": "entry",
+    "id": "e-0cccc1",
+    "note_id": "n-0aaaaa",
+    "addendum_id": "a-0ccccc",
+    "type": "decision",
+    "text": "Station Brest is the reference."
+  }
+]

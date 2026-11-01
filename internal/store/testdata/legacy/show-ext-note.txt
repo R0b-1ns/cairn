@@ -1,0 +1,9 @@
+0
+n-0bbbbb  Chart for tides
+task: TP-03.1   repo: client   agent: reviewer   model: m-2   at: 2026-10-29T10:30:00Z
+status: done
+entries:
+  e-0bbbb1  change   Drew the tide chart.
+  e-0bbbb2  open     Colour scheme for spring tides?
+  e-0bbbb3  note     Uses the importer output.
+none: decision, helper

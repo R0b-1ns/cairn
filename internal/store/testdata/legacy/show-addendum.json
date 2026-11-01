@@ -1,0 +1,20 @@
+0
+{
+  "id": "a-0ccccc",
+  "note_id": "n-0aaaaa",
+  "agent": "builder",
+  "model": "m-1",
+  "at": "2026-10-30T08:15:00Z",
+  "status": "done",
+  "entries": [
+    {
+      "id": "e-0cccc1",
+      "type": "decision",
+      "text": "Station Brest is the reference.",
+      "by": "agent"
+    }
+  ],
+  "resolves": [
+    "e-0aaaa3"
+  ]
+}

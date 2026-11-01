@@ -1,0 +1,7 @@
+0
+project: tidepool (project mode)
+repos: server, client
+default repo: server
+task pattern: ^(?P<base>[A-Z]{2,5}-\d{1,4})(?:\.(?P<ext>\d{1,3}))?$
+
+Tide data service.

@@ -1,0 +1,7 @@
+5
+done tasks without notes:
+  TP-09  no note for this task
+done tasks whose latest note is not done:
+  TP-04  latest note n-0ddddd is blocked
+open points older than 0 days:
+  e-0bbbb2  2026-10-29  Colour scheme for spring tides?  (n-0bbbbb)

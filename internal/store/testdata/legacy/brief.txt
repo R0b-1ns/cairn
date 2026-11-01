@@ -1,0 +1,12 @@
+0
+TP-03: 2 note(s)
+notes:
+  n-0aaaaa  TP-03    done        2026-10-28  Tide import (server, builder)
+  n-0bbbbb  TP-03.1  done        2026-10-29  Chart for tides (client, reviewer)
+changes:
+  e-0aaaa1  Wrote the tide importer.  (n-0aaaaa)
+  e-0bbbb1  Drew the tide chart.  (n-0bbbbb)
+decisions in force:
+  e-0cccc1  [agent] Station Brest is the reference.  (n-0aaaaa via a-0ccccc)
+open points:
+  e-0bbbb2  Colour scheme for spring tides?  (n-0bbbbb)

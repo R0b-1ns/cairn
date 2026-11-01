@@ -1,0 +1,15 @@
+0
+{
+  "id": "e-0aaaa2",
+  "type": "decision",
+  "text": "Store heights in millimetres.",
+  "by": "user",
+  "note_id": "n-0aaaaa",
+  "addendum_id": "",
+  "task": "TP-03",
+  "repo": "server",
+  "at": "2026-10-28T09:00:00Z",
+  "closed": true,
+  "closed_by": "n-0ddddd",
+  "closed_at": "2026-10-31T12:00:00Z"
+}

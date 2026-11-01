@@ -1,0 +1,65 @@
+0
+{
+  "id": "n-0aaaaa",
+  "agent": "builder",
+  "repo": "server",
+  "at": "2026-10-28T09:00:00Z",
+  "task": "TP-03",
+  "model": "m-1",
+  "title": "Tide import",
+  "status": "in_progress",
+  "entries": [
+    {
+      "id": "e-0aaaa1",
+      "type": "change",
+      "text": "Wrote the tide importer."
+    },
+    {
+      "id": "e-0aaaa2",
+      "type": "decision",
+      "text": "Store heights in millimetres.",
+      "by": "user"
+    },
+    {
+      "id": "e-0aaaa3",
+      "type": "open",
+      "text": "Which station is the reference?"
+    },
+    {
+      "id": "e-0aaaa4",
+      "type": "note",
+      "text": "Data arrives hourly."
+    }
+  ],
+  "none": [
+    "helper"
+  ],
+  "impacts": [
+    "client"
+  ],
+  "commits": [
+    "abc1234"
+  ],
+  "current_status": "done",
+  "addenda": [
+    {
+      "id": "a-0ccccc",
+      "note_id": "n-0aaaaa",
+      "agent": "builder",
+      "model": "m-1",
+      "at": "2026-10-30T08:15:00Z",
+      "status": "done",
+      "entries": [
+        {
+          "id": "e-0cccc1",
+          "type": "decision",
+          "text": "Station Brest is the reference.",
+          "by": "agent"
+        }
+      ],
+      "resolves": [
+        "e-0aaaa3"
+      ]
+    }
+  ]
+}

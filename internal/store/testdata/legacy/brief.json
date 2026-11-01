@@ -1,0 +1,92 @@
+0
+{
+  "changes": [
+    {
+      "id": "e-0aaaa1",
+      "type": "change",
+      "text": "Wrote the tide importer.",
+      "by": "",
+      "note_id": "n-0aaaaa",
+      "addendum_id": "",
+      "task": "TP-03",
+      "repo": "server",
+      "at": "2026-10-28T09:00:00Z",
+      "closed": false,
+      "closed_by": "",
+      "closed_at": ""
+    },
+    {
+      "id": "e-0bbbb1",
+      "type": "change",
+      "text": "Drew the tide chart.",
+      "by": "",
+      "note_id": "n-0bbbbb",
+      "addendum_id": "",
+      "task": "TP-03.1",
+      "repo": "client",
+      "at": "2026-10-29T10:30:00Z",
+      "closed": false,
+      "closed_by": "",
+      "closed_at": ""
+    }
+  ],
+  "changes_total": 2,
+  "decisions": [
+    {
+      "id": "e-0cccc1",
+      "type": "decision",
+      "text": "Station Brest is the reference.",
+      "by": "agent",
+      "note_id": "n-0aaaaa",
+      "addendum_id": "a-0ccccc",
+      "task": "TP-03",
+      "repo": "server",
+      "at": "2026-10-30T08:15:00Z",
+      "closed": false,
+      "closed_by": "",
+      "closed_at": ""
+    }
+  ],
+  "decisions_total": 1,
+  "notes": [
+    {
+      "id": "n-0aaaaa",
+      "task": "TP-03",
+      "repo": "server",
+      "agent": "builder",
+      "model": "m-1",
+      "at": "2026-10-28T09:00:00Z",
+      "title": "Tide import",
+      "status": "done"
+    },
+    {
+      "id": "n-0bbbbb",
+      "task": "TP-03.1",
+      "repo": "client",
+      "agent": "reviewer",
+      "model": "m-2",
+      "at": "2026-10-29T10:30:00Z",
+      "title": "Chart for tides",
+      "status": "done"
+    }
+  ],
+  "notes_total": 2,
+  "open": [
+    {
+      "id": "e-0bbbb2",
+      "type": "open",
+      "text": "Colour scheme for spring tides?",
+      "by": "",
+      "note_id": "n-0bbbbb",
+      "addendum_id": "",
+      "task": "TP-03.1",
+      "repo": "client",
+      "at": "2026-10-29T10:30:00Z",
+      "closed": false,
+      "closed_by": "",
+      "closed_at": ""
+    }
+  ],
+  "open_total": 1,
+  "task": "TP-03"
+}

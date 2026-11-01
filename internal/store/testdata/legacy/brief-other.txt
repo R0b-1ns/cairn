@@ -1,0 +1,10 @@
+0
+TP-04: 1 note(s)
+notes:
+  n-0ddddd  TP-04    blocked     2026-10-31  Units rework (server, builder)
+changes:
+  e-0dddd1  Switched to centimetres.  (n-0ddddd)
+decisions in force:
+  e-0dddd2  [user] Store heights in centimetres.  (n-0ddddd)
+open points:
+  none

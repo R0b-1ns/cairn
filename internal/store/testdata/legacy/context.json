@@ -1,0 +1,12 @@
+0
+{
+  "name": "tidepool",
+  "mode": "project",
+  "context": "Tide data service.",
+  "repos": [
+    "server",
+    "client"
+  ],
+  "default_repo": "server",
+  "task_pattern": "^(?P<base>[A-Z]{2,5}-\\d{1,4})(?:\\.(?P<ext>\\d{1,3}))?$"
+}

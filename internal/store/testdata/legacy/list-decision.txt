@@ -1,0 +1,4 @@
+0
+e-0dddd2  decision TP-04  server  2026-10-31  [user] Store heights in centimetres.  n-0ddddd
+e-0cccc1  decision TP-03  server  2026-10-30  [agent] Station Brest is the reference.  n-0aaaaa
+e-0aaaa2  decision TP-03  server  2026-10-28  [user] Store heights in millimetres.  (superseded by n-0ddddd)  n-0aaaaa
