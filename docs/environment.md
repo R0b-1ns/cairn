@@ -10,6 +10,7 @@ Environment variables that cairn reads. Flags win over variables where both appl
 | `CAIRN_PROJECT` | Every command that opens a project | No project named | Registered project name to use when `--project` is not given. Skips the walk from the current directory. An empty value counts as unset. |
 | `HOME` | Default data directory on macOS and other systems | If empty and `CAIRN_HOME` is unset, cairn fails | Base of the default data directory. |
 | `XDG_DATA_HOME` | Default data directory on systems other than macOS | `$HOME/.local/share` | Base of the default data directory: `$XDG_DATA_HOME/cairn`. Ignored on macOS. An empty value counts as unset. |
+| `CAIRN_NO_UPDATE_CHECK` | `init` | Unset | Any non-empty value skips the check for a newer release that `init` runs after creating a project. |
 | `SUDO_UID` | Trust check on project-mode stores, only when the process runs as root | Unset | Numeric user ID that invoked `sudo`. A project store owned by this user is trusted by root. Other stores are refused. |
 
 Precedence for the project name: `--project` flag, then `CAIRN_PROJECT`, then the walk from the current directory.
