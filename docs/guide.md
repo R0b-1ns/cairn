@@ -69,7 +69,7 @@ cairn amend n-4k7q2m --agent builder --model claude-opus-5-5 --status done \
 - `--resolves <entry id>` closes an open point; `--supersedes <entry id>` replaces a decision. Targets may be in any note. The old text stays readable.
 - `--status` sets a new status. A note's current status is the one from its most recent addendum that carries a status.
 - `cairn add` accepts `--resolves` and `--supersedes` too.
-- An addendum needs at least one entry, a status, `--resolves` or `--supersedes`.
+- An addendum needs at least one entry, a status, `--ref`, `--resolves` or `--supersedes`.
 
 ## Exit codes
 

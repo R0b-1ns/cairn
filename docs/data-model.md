@@ -8,7 +8,7 @@ Rules that every note, addendum, entry and link follows. Read this before writin
 |---|---|---|---|
 | project | The one configuration row: name, mode, context, repos, task pattern. Written once by `init`. | `project` (row id 1) | none |
 | note | One immutable work note: agent, repo, model, title, status, sections. | `notes` | `n-` |
-| addendum | One immutable addition to one note: may set a status, add entries, resolve open entries, supersede decisions. | `addenda` | `a-` |
+| addendum | One immutable addition to one note: may set a status, add entries, resolve open entries, supersede decisions, or carry a ticket link (`ref`). | `addenda` | `a-` |
 | entry | One typed piece of text. Belongs to exactly one note or exactly one addendum. | `entries` | `e-` |
 | link | A `resolves` or `supersedes` record from a note or addendum to one entry. | `links` | none |
 
