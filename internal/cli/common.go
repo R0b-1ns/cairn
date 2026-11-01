@@ -112,7 +112,7 @@ func warnIDMismatch(c *Ctx, reg *registry.Registry, loc locate.Location, st *sto
 	if loc.Name != "" {
 		if e, err := reg.Get(loc.Name); err == nil && e.ID != "" && e.ID != ls.ID {
 			fmt.Fprintf(c.Stderr, "cairn: warning: the registry knows project %q with id %s, but the database at %s has id %s; it may be a different project; run: cairn project remove %s, then: cairn project add %s\n",
-				loc.Name, e.ID, loc.Root, ls.ID, loc.Name, loc.Root)
+				sanitize(loc.Name), sanitize(e.ID), sanitize(loc.Root), sanitize(ls.ID), sanitize(loc.Name), sanitize(loc.Root))
 		}
 	}
 }

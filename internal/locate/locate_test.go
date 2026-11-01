@@ -570,3 +570,22 @@ func TestPointerRoundTrip(t *testing.T) {
 		t.Fatalf("after remove: found=%v err=%v", found, err)
 	}
 }
+
+func TestReadPointerRejectsInvalidFields(t *testing.T) {
+	base := tempBase(t)
+	cases := map[string]string{
+		"parent":    `{"parent":"Bad Name\u001b[2J","repo":"web"}`,
+		"repo":      `{"parent":"shop","repo":"we b"}`,
+		"parent_id": `{"parent":"shop","repo":"web","parent_id":"p-ILOU"}`,
+	}
+	for name, body := range cases {
+		root := filepath.Join(base, name)
+		mkdirAll(t, filepath.Join(root, ".cairn"))
+		if err := os.WriteFile(filepath.Join(root, ".cairn", "links.json"), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := ReadPointer(root); err == nil || !strings.Contains(err.Error(), name) {
+			t.Errorf("%s: want a refusal naming the field, got %v", name, err)
+		}
+	}
+}

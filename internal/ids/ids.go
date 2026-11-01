@@ -64,3 +64,17 @@ func NewProject() string {
 	}
 	return string(b)
 }
+
+// ValidProject reports whether s is a well-formed project ID: "p-" followed by
+// exactly 10 characters of the alphabet.
+func ValidProject(s string) bool {
+	if len(s) != projectLen+2 || s[0] != 'p' || s[1] != '-' {
+		return false
+	}
+	for i := 2; i < len(s); i++ {
+		if !strings.ContainsRune(alphabet, rune(s[i])) {
+			return false
+		}
+	}
+	return true
+}

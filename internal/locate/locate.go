@@ -10,8 +10,10 @@ import (
 	"strconv"
 	"syscall"
 
+	"github.com/R0b-1ns/cairn/internal/ids"
 	"github.com/R0b-1ns/cairn/internal/model"
 	"github.com/R0b-1ns/cairn/internal/registry"
+	"github.com/R0b-1ns/cairn/internal/validate"
 )
 
 // ErrNoProject means no project was found; commands must not create one.
@@ -154,6 +156,15 @@ func ReadPointer(root string) (p Pointer, found bool, err error) {
 	if p.Parent == "" || p.Repo == "" {
 		return Pointer{}, false, fmt.Errorf("%s is malformed: parent and repo are required", file)
 	}
+	if !validate.ValidName(p.Parent) {
+		return Pointer{}, false, fmt.Errorf("%s is malformed: parent is not a valid project name", file)
+	}
+	if !validate.ValidRepo(p.Repo) {
+		return Pointer{}, false, fmt.Errorf("%s is malformed: repo is not a valid repo name", file)
+	}
+	if p.ParentID != "" && !ids.ValidProject(p.ParentID) {
+		return Pointer{}, false, fmt.Errorf("%s is malformed: parent_id is not a valid project id", file)
+	}
 	return p, true, nil
 }
 
@@ -249,7 +260,7 @@ func fromPointer(reg *registry.Registry, childRoot string, p Pointer) (Location,
 			ErrNoProject, childRoot, p.Parent, p.Repo, p.Parent, p.Repo, childRoot)
 	}
 	if p.ParentID != "" && e.ID != "" && p.ParentID != e.ID {
-		return Location{}, fmt.Errorf("%w: the pointer in %s belongs to another project also named %q (id %s, the registered one is %s); to detach this folder, run from it: cairn project unlink",
+		return Location{}, fmt.Errorf("%w: the pointer in %s belongs to another project also named %q (id %q, the registered one is %q); to detach this folder, run from it: cairn project unlink",
 			ErrNoProject, childRoot, p.Parent, p.ParentID, e.ID)
 	}
 	loc, err := fromEntry(reg, e)

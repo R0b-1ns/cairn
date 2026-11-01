@@ -615,3 +615,26 @@ func TestPointerParentIDMismatchRefused(t *testing.T) {
 		t.Fatalf("stray: %+v", r)
 	}
 }
+
+func TestHostileChildNameNeverReachesTerminal(t *testing.T) {
+	e := newEnv(t)
+	e.initProject()
+	db, err := sql.Open("sqlite", filepath.Join(e.root, ".cairn", "cairn.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO link_events(kind,name,repo,child_kind) VALUES ('child_linked', ?, 'web', 'attached')`, "evil\x1b[2Jname"); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	clone := realTemp(t)
+	copyDir(t, filepath.Join(e.root, ".cairn"), filepath.Join(clone, ".cairn"))
+	other := newEnv(t)
+	r := other.runIn(realTemp(t), "", "project", "add", clone)
+	if r.code == 0 {
+		t.Fatalf("a database with a hostile child name must be refused: %+v", r)
+	}
+	if strings.Contains(r.out+r.err, "\x1b") {
+		t.Fatalf("escape sequence reached the terminal: %q", r.out+r.err)
+	}
+}

@@ -294,3 +294,46 @@ func TestParentReplay(t *testing.T) {
 		t.Fatalf("parent = %+v, want nil", l.Parent)
 	}
 }
+
+func TestReplayRefusesInvalidEvents(t *testing.T) {
+	for _, c := range []struct{ kind, name, repo, pid string }{
+		{"id", "p-bad\x1b[2J", "", ""},
+		{"repo_added", "", "Bad Repo", ""},
+		{"child_linked", "web\x1b[2J", "web", ""},
+		{"child_linked", "web", "bad repo", ""},
+		{"child_detached", "Bad Name", "", ""},
+		{"parent_set", "shop", "", "p-zzz"},
+		{"parent_set", "Bad\nName", "", ""},
+	} {
+		s, _ := newStore(t)
+		if _, err := s.db.Exec(`INSERT INTO link_events(kind,name,repo,parent_id) VALUES (?,?,?,?)`, c.kind, c.name, c.repo, c.pid); err != nil {
+			t.Fatal(err)
+		}
+		_, err := s.Links()
+		if err == nil || !strings.Contains(err.Error(), "link event 1") {
+			t.Errorf("%+v: want refusal naming seq 1, got %v", c, err)
+		}
+	}
+}
+
+func TestLinkWritersRejectInvalidValues(t *testing.T) {
+	s, path := newStore(t)
+	if err := s.LinkChild(model.Child{Name: "Bad\x1b", Repo: "web", Kind: model.ChildAttached}); err == nil {
+		t.Error("LinkChild accepted a bad name")
+	}
+	if err := s.LinkChild(model.Child{Name: "web", Repo: "Bad Repo", Kind: model.ChildAttached}); err == nil {
+		t.Error("LinkChild accepted a bad repo")
+	}
+	if err := s.SetParent(model.ParentRef{Name: "Bad Name"}); err == nil {
+		t.Error("SetParent accepted a bad name")
+	}
+	if err := s.SetParent(model.ParentRef{Name: "shop", ID: "nope"}); err == nil {
+		t.Error("SetParent accepted a bad id")
+	}
+	if err := s.AddRepo("Bad Repo"); err == nil {
+		t.Error("AddRepo accepted a bad repo")
+	}
+	if n := countLinkEvents(t, path); n != 0 {
+		t.Errorf("rejected writes left %d events", n)
+	}
+}

@@ -37,3 +37,14 @@ func TestIDsFormat(t *testing.T) {
 		t.Errorf(`Kind("zzz") = %q, want 0`, got)
 	}
 }
+
+func TestValidProject(t *testing.T) {
+	if !ValidProject(NewProject()) {
+		t.Fatal("a generated project id must be valid")
+	}
+	for _, s := range []string{"", "p-", "p-0123456789a", "p-012345678", "n-0123456789", "p_0123456789", "p-0123456ilou", "p-012345678\x1b", "P-0123456789"} {
+		if ValidProject(s) {
+			t.Errorf("ValidProject(%q) = true", s)
+		}
+	}
+}

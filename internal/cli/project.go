@@ -383,9 +383,9 @@ func defineProjectAdd(fs *flag.FlagSet) Handler {
 		if err := reg.Register(registry.Entry{Name: p.Name, Mode: model.ModeProject, Path: root, ID: ls.ID}); err != nil {
 			return regErr(c, err)
 		}
-		fmt.Fprintf(c.Stdout, "registered %s at %s\n", p.Name, root)
+		fmt.Fprintf(c.Stdout, "registered %s at %s\n", sanitize(p.Name), sanitize(root))
 		for _, ch := range ls.Children {
-			fmt.Fprintf(c.Stdout, "no path known for child %s; run: cairn project link %s <path>\n", ch.Name, ch.Name)
+			fmt.Fprintf(c.Stdout, "no path known for child %s; run: cairn project link %s <path>\n", sanitize(ch.Name), sanitize(ch.Name))
 		}
 		return ExitOK
 	}

@@ -32,15 +32,19 @@ func (s *Store) Links() (LinkState, error) { return replayLinks(s.db) }
 
 func replayLinks(q querier) (LinkState, error) {
 	var st LinkState
-	rows, err := q.Query(`SELECT kind,name,repo,child_kind,parent_id FROM link_events ORDER BY seq`)
+	rows, err := q.Query(`SELECT seq,kind,name,repo,child_kind,parent_id FROM link_events ORDER BY seq`)
 	if err != nil {
 		return st, err
 	}
 	defer rows.Close()
 	for rows.Next() {
+		var seq int64
 		var kind, name, repo, ck, pid string
-		if err := rows.Scan(&kind, &name, &repo, &ck, &pid); err != nil {
+		if err := rows.Scan(&seq, &kind, &name, &repo, &ck, &pid); err != nil {
 			return st, err
+		}
+		if err := checkLinkEvent(kind, name, repo, pid); err != nil {
+			return LinkState{}, fmt.Errorf("link event %d refused: %w", seq, err)
 		}
 		switch kind {
 		case evID:
@@ -67,6 +71,34 @@ func replayLinks(q querier) (LinkState, error) {
 		}
 	}
 	return st, rows.Err()
+}
+
+// checkLinkEvent validates the identifying values of one link event, which may
+// come from a database written by someone else.
+func checkLinkEvent(kind, name, repo, pid string) error {
+	switch kind {
+	case evID:
+		if !ids.ValidProject(name) {
+			return fmt.Errorf("invalid project id")
+		}
+	case evRepoAdded:
+		if !validate.ValidRepo(repo) {
+			return fmt.Errorf("invalid repo name")
+		}
+	case evChildLinked:
+		if !validate.ValidName(name) || !validate.ValidRepo(repo) {
+			return fmt.Errorf("invalid child name or repo name")
+		}
+	case evChildDetached:
+		if !validate.ValidName(name) {
+			return fmt.Errorf("invalid child name")
+		}
+	case evParentSet:
+		if !validate.ValidName(name) || (pid != "" && !ids.ValidProject(pid)) {
+			return fmt.Errorf("invalid parent name or id")
+		}
+	}
+	return nil
 }
 
 func containsString(list []string, s string) bool {
@@ -110,6 +142,9 @@ func (s *Store) EnsureProjectID() (string, error) {
 		return st.ID, nil
 	}
 	id := ids.NewProject()
+	if !ids.ValidProject(id) {
+		return "", fmt.Errorf("generated an invalid project id")
+	}
 	if _, err := tx.Exec(`INSERT INTO link_events(kind,name) VALUES (?,?)`, evID, id); err != nil {
 		return "", err
 	}
@@ -155,6 +190,12 @@ func (s *Store) AddRepo(repo string) error {
 
 // LinkChild records a child. It fails when a child of that name is active.
 func (s *Store) LinkChild(c model.Child) error {
+	if !validate.ValidName(c.Name) {
+		return fmt.Errorf("child name %q is not a valid name", c.Name)
+	}
+	if !validate.ValidRepo(c.Repo) {
+		return fmt.Errorf("repo %q is not a valid repo name", c.Repo)
+	}
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -202,6 +243,12 @@ func (s *Store) DetachChild(name string) error {
 
 // SetParent records the parent of this project.
 func (s *Store) SetParent(p model.ParentRef) error {
+	if !validate.ValidName(p.Name) {
+		return fmt.Errorf("parent name %q is not a valid name", p.Name)
+	}
+	if p.ID != "" && !ids.ValidProject(p.ID) {
+		return fmt.Errorf("parent id %q is not a valid project id", p.ID)
+	}
 	_, err := s.db.Exec(`INSERT INTO link_events(kind,name,parent_id) VALUES (?,?,?)`, evParentSet, p.Name, p.ID)
 	return err
 }
