@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.1.0](https://github.com/R0b-1ns/cairn/compare/v1.0.1...v1.1.0) (2026-11-01)
+
+
+### Features
+
+* add cairn view, a browsable site of the notes ([4ea172d](https://github.com/R0b-1ns/cairn/commit/4ea172d9de76983589e45b0e59b0c3d62a297464))
+* **install:** add an install script that verifies the release checksum ([361edec](https://github.com/R0b-1ns/cairn/commit/361edeced0c00dec923dd4d17af87f05b10f5971))
+* **install:** add an install script that verifies the release checksum ([314f304](https://github.com/R0b-1ns/cairn/commit/314f304313de2a034380a5f16f3996ce78a765ee))
+* **view:** add the cairn view command ([b53b4be](https://github.com/R0b-1ns/cairn/commit/b53b4be57da3200599cdec6d06130aac1ba614c4))
+* **view:** collect notes and entries for the site ([96a655e](https://github.com/R0b-1ns/cairn/commit/96a655e4443e7668a71cf13cf61449cf03e5f43c))
+* **view:** render the static site ([1222256](https://github.com/R0b-1ns/cairn/commit/12222568a79a4c72a1fbdebcb66f1d57bc2814f3))
+* **view:** serve the generated site on localhost ([5e16d1c](https://github.com/R0b-1ns/cairn/commit/5e16d1ca9a0e73fccd8bc905fda1b3e3f75a9ddd))
+
+
+### Bug Fixes
+
+* **export:** sanitize each stored value where the Markdown prints it ([e1ae83b](https://github.com/R0b-1ns/cairn/commit/e1ae83b6c02f395a7691dcea147e5f64a463baa3))
+* **view:** explain an entry view whose entries are all closed ([ce79b74](https://github.com/R0b-1ns/cairn/commit/ce79b742eb4efff74e88fc7238c2f51720fecc60))
+* **view:** follow the task rule of the CLI and offer per-view filter values ([d23aa80](https://github.com/R0b-1ns/cairn/commit/d23aa8081795f5d7814d02dc60a47c79dbe86443))
+* **view:** let a second Ctrl-C stop the server at once ([89d6b97](https://github.com/R0b-1ns/cairn/commit/89d6b97faf45595efdd07d5dbf2f12b8cedae2c1))
+* **view:** make "Download as Markdown" download when opened from disk ([371dab8](https://github.com/R0b-1ns/cairn/commit/371dab8ade163971ffe1289bcf53441ca06ccb1a))
+* **view:** mark closed entries in a downloaded entry view ([62c357f](https://github.com/R0b-1ns/cairn/commit/62c357f54092a4ca4f4f90f61100343cd05de4e9))
+* **view:** refuse cross-site requests to the served site ([876f9a7](https://github.com/R0b-1ns/cairn/commit/876f9a7ac5232d7260d5d86dc5cc4256fdd4484b))
+* **view:** render the site Markdown from stored values, then sanitize it ([e71a6d2](https://github.com/R0b-1ns/cairn/commit/e71a6d2c60fcc5eecca37877ff7d8dc037d10ecd))
+* **view:** sanitize every stored text that reaches the site ([5c541b8](https://github.com/R0b-1ns/cairn/commit/5c541b879e27b5e7a7d55bce861d87be8ba387d5))
+* **view:** title the entry-view download and say when it is empty ([7c5565f](https://github.com/R0b-1ns/cairn/commit/7c5565f8bf25e15811cdbfab3b32df0839753c8e))
+
 ## [1.0.1](https://github.com/R0b-1ns/cairn/compare/v1.0.0...v1.0.1) (2026-10-30)
 
 
