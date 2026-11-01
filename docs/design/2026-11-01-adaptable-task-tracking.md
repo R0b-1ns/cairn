@@ -108,15 +108,15 @@ A test checks that `guide.md` contains these instructions, in the same way `docs
 ## The `ref` link
 
 - `add --ref URL` stores an optional `ref` on the note, validated as described under Author and branch.
-- `init --task-url 'https://x.atlassian.net/browse/{task}'` stores a template. It must contain `{task}`, start with `http://` or `https://`, be one line and at most 500 characters; otherwise exit 3. When a note has a task but no `ref`, display commands compute the link from the template. `{task}` is replaced by the base task without a leading `#`, so `#128` gives `128` and `.../issues/{task}` yields a working link. An extension is ignored: `PROJ-12.1` links to `PROJ-12`. A stored `ref` always wins over the template.
-- `brief`, `show`, `export` and `view` print the link when there is one. The template is stored only in the project row, so it cannot be changed later (same rule as the other keys).
+- `init --task-url 'https://x.atlassian.net/browse/{task}'` stores a template. It must contain `{task}`, start with `http://` or `https://`, be one line and at most 500 characters; otherwise exit 3. When a note has a task but no `ref`, display commands compute the link from the template. `{task}` is replaced by the base task as the project's pattern splits it (the `base` group), without a leading `#` and escaped as one URL path segment, so `#128` gives `128` and `.../issues/{task}` yields a working link. An extension is ignored: `PROJ-12.1` links to `PROJ-12`. A stored `ref` always wins over the template.
+- `brief`, `show` and `view` print the stored refs, or the link computed from the template when none is stored (`brief --json` and `show --json` carry them as `refs`). The Markdown `export` prints only the refs stored on each note and addendum, never the computed link: it is a snapshot of the note's own data. The template is stored only in the project row, so it cannot be changed later (same rule as the other keys).
 
 ### Linking tickets later (for example after opening the project to the public)
 
 A project started with `auto` (`T-1`, `T-2`, ...) can later gain GitHub issues, or a Jira, without changing its mode. The mode is write-once, but a `ref` is not tied to it:
 
 - `amend` gains `--ref URL`, and the addendum JSON gains `ref`. An addendum that carries only a `ref` is valid (today an empty addendum is refused with exit 3; a `ref` counts as content). So `cairn amend n-4k7q2m --agent human --model none --ref https://github.com/acme/tidepool/issues/128` links issue 128 to the task of that note without touching anything else.
-- A task can have several refs: its notes and addenda may each carry one. `brief`, `show`, `export` and `view` show all refs of the task, newest first, deduplicated. A task's refs are those of every note and addendum with the same `task_base`.
+- A task can have several refs: its notes and addenda may each carry one. `brief`, `show` and `view` show all refs of the task, newest first, deduplicated (`show` puts the note's own ref first). The Markdown `export` prints each note's and addendum's own stored ref only. A task's refs are those of every note and addendum with the same `task_base`.
 - Reverse lookup: `list --ref URL` finds the notes of the task that carries that URL, so someone who starts from issue 128 can find T-7. The match is exact on the stored URL.
 - When the project later also wants a URL template for its numbering, that is not possible (write-once). Individual refs cover that need.
 - Nothing else about the project changes: the old IDs stay valid and notes already written stay untouched.

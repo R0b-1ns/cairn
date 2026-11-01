@@ -24,7 +24,7 @@ None. A positional argument gives exit code 2.
 | `--default-repo` | (empty; the only repo when `--repos` lists exactly one) | one of the names in `--repos` | Repo that `cairn add` uses when `--repo` is omitted. Stored as the project key `default_repo`; refused with exit 3 if it is not in `--repos`. |
 | `--tasks` | (empty; see Task numbering) | `auto`, `jira`, `linear`, `github`, `custom` | How tasks are numbered. The mode compiles to the stored task pattern (see `configuration.md`). `custom` needs `--task-pattern` (exit 3 without it). The other modes cannot be combined with `--task-pattern` (exit 2). An unknown value is refused with exit 3, listing the valid modes. |
 | `--task-prefix` | (empty; `T` for `auto`) | 1-5 capital letters (`^[A-Z]{1,5}$`) | Prefix of the `auto` mode: `FEAT` gives `FEAT-1`, `FEAT-2`. Refused with exit 3 with any other mode, and when given alone without `--tasks auto`. |
-| `--task-url` | (empty) | an `http://` or `https://` URL containing `{task}`, up to 500 characters | Template that turns a task into a link; `{task}` is replaced by the task ID. Allowed with every mode. |
+| `--task-url` | (empty) | an `http://` or `https://` URL containing `{task}`, up to 500 characters | Template that turns a task into a link; `{task}` is replaced by the base task, without a leading `#` and without its extension (`PROJ-12.1` and `PROJ-12` both give `PROJ-12`, `#128` gives `128`), escaped as one URL path segment. Allowed with every mode. |
 | `--task-pattern` | (empty; when no task flag is given the pattern is `^(?P<base>[A-Z]{2,5}-\d{1,4})(?:\.(?P<ext>\d{1,3}))?$`) | a regular expression with a named group `(?P<base>...)` and optionally `(?P<ext>...)`; at most 200 characters | The format every task ID must match. Given alone, it means `--tasks custom` with this pattern; it also goes with `--tasks custom`, and with no other mode (exit 2). An empty value is refused with exit 3. |
 | `--no-input` | `false` | | Never ask questions, even in a terminal; every value comes from the flags or from the defaults. See Interactive questions. |
 
@@ -92,16 +92,16 @@ Machine mode prints `(machine mode)` and the database path under the data direct
 ## Examples
 
 ```
-cd /work/tidepool && cairn init --name tidepool --repos server,client --context "Tide data service."
+cd /work/tidepool && cairn init --name tidepool --repos server,client --tasks auto --context "Tide data service."
 ```
 
-Creates `/work/tidepool/.cairn/cairn.db` and prints the two lines in Output. Exit code 0.
+Creates `/work/tidepool/.cairn/cairn.db` with automatic task numbering (`T-1`, `T-2`, ...) and prints the two lines in Output. Exit code 0.
 
 ```
-cairn init --name tidepool --repos server,client --mode machine --path /work/tidepool
+cairn init --name tidepool --repos server,client --mode machine --path /work/tidepool --tasks jira
 ```
 
-Creates the database under the data directory and registers `tidepool` at `/work/tidepool`, on a machine where `tidepool` is not yet registered. Exit code 0.
+Creates the database under the data directory and registers `tidepool` at `/work/tidepool`, on a machine where `tidepool` is not yet registered; tasks are Jira keys. Exit code 0.
 
 ```
 cairn init --name tidepool --repos server --task-pattern '^(?P<base>TP-\d{2})(?:\.(?P<ext>\d{1,3}))?$'
@@ -134,7 +134,7 @@ cairn init --name tidepool --repos server --tasks jira --task-pattern '^TP-\d+$'
 Exit code 2: `--task-pattern` only goes with `--tasks custom`.
 
 ```
-cairn init --name Tidepool --repos server
+cairn init --name Tidepool --repos server --tasks auto
 ```
 
 Exit code 3: the name has an uppercase letter.
@@ -165,7 +165,7 @@ database: /work/demo/.cairn/cairn.db
 cairn init --name demo --repos server --no-input
 ```
 
-Never asks, even in a terminal; uses the legacy default numbering and prints its note. Exit code 0.
+Never asks, even in a terminal; on purpose, no task flag is given, so it uses the legacy default numbering (mode `custom` with the default pattern) and prints its note. Exit code 0.
 
 ## Notes
 

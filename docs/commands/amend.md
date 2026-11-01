@@ -47,7 +47,7 @@ addendum a-9x3b2c added to n-4k7q2m
   e-8k3m5p note
 ```
 
-The second line lists each entry of the addendum by ID and type. An addendum with only `--status`, `--resolves` or `--supersedes` prints the first line only.
+The second line lists each entry of the addendum by ID and type. An addendum with only `--status`, `--resolves`, `--supersedes` or `--ref` (no entries) prints the first line only.
 
 `--json` prints the saved addendum: `id`, `note_id`, `agent`, `model`, `at`, and `status`, `entries`, `resolves`, `supersedes`, `author_name`, `author_email`, `branch`, `ref` when set.
 

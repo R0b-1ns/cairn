@@ -38,7 +38,7 @@ CAIRN_PROJECT=tidepool cairn list --task TP-03
 Keep the registry and machine-mode databases in a chosen folder:
 
 ```sh
-CAIRN_HOME=/srv/cairn-data cairn init --name tidepool --mode machine --repos server,client
+CAIRN_HOME=/srv/cairn-data cairn init --name tidepool --mode machine --repos server,client --tasks auto
 CAIRN_HOME=/srv/cairn-data cairn projects
 ```
 

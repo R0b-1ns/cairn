@@ -41,7 +41,7 @@ When no task flag is given and `init` does not ask questions (no terminal, or `-
 A task ID is any string that the pattern matches. Matching uses Go's regular expression engine (RE2), which runs in linear time.
 
 - The pattern must compile and must contain the named group `(?P<base>...)`. The group `(?P<ext>...)` is optional.
-- The `base` group becomes the note's `task_base`. The `ext` group, when it matched, becomes `task_ext`. The whole ID is stored as `task`.
+- The `base` group becomes the note's `task_base`, and the value that replaces `{task}` in `task_url` (without a leading `#`, escaped as one URL path segment). The `ext` group, when it matched, becomes `task_ext`. The whole ID is stored as `task`.
 - A pattern is not anchored by cairn. Write `^` and `$` yourself, or a longer ID that contains a valid task will match too.
 - Keep the `base` group from matching an empty string. cairn does not check this.
 
@@ -81,16 +81,16 @@ cairn init --name tidepool --repos server,client \
 
 ## Example: init
 
-Project mode (default):
+Project mode (default), with automatic task numbering:
 
 ```sh
-cairn init --name tidepool --repos server,client --context "Tide data service."
+cairn init --name tidepool --repos server,client --tasks auto --context "Tide data service."
 ```
 
-Machine mode:
+Machine mode, with Jira keys:
 
 ```sh
-cairn init --name tidepool --mode machine --repos server,client
+cairn init --name tidepool --mode machine --repos server,client --tasks jira
 ```
 
 Output on success:
