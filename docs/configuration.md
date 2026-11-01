@@ -11,16 +11,32 @@ A project has five configuration keys. They are set once by `cairn init`, stored
 | `context` | `--context` | empty | Any text. Newline and tab allowed | At most 2000 characters; no other control characters | Free text describing the project. Printed by `cairn context`. |
 | `repos` | `--repos` (comma-separated; spaces trimmed; empty items dropped) | none; required | At least 1 and at most 50 names, each matching `^[a-z0-9][a-z0-9._-]{0,39}$` | 1-40 characters per name | The only repo names a note may use in `repo` or `impacts`. |
 | `default_repo` | `--default-repo` | the only repo when `--repos` lists exactly one; otherwise empty (no default) | empty, or one of `repos` | same as a repo name | The repo `add` uses when `--repo` is omitted (flag mode) or `repo` is missing (`--stdin`). An explicit `--repo` always wins. |
-| `task_pattern` | `--task-pattern` | `^(?P<base>[A-Z]{2,5}-\d{1,4})(?:\.(?P<ext>\d{1,3}))?$` | A Go (RE2) regular expression with a named group `base`. A named group `ext` is optional. | At most 200 bytes | Recognizes task IDs. See below. |
-| `task_mode` | none yet | empty | empty, or `auto`, `jira`, `linear`, `github`, `custom` | One of the values | Stored since schema version 4. Empty on existing projects, which keep using `task_pattern` only. |
-| `task_prefix` | none yet | empty | empty, or 1-5 capital letters | At most 5 characters | Stored since schema version 4. Prefix used by the `auto` mode. |
-| `task_url` | none yet | empty | empty, or an `http://` or `https://` URL containing `{task}` | At most 500 characters | Stored since schema version 4. Template that turns a task into a link. |
+| `task_pattern` | `--task-pattern`, or compiled from `--tasks` | `^(?P<base>[A-Z]{2,5}-\d{1,4})(?:\.(?P<ext>\d{1,3}))?$` when no task flag is given | A Go (RE2) regular expression with a named group `base`. A named group `ext` is optional. | At most 200 bytes | Recognizes task IDs. See below. |
+| `task_mode` | `--tasks` | `custom` when no task flag is given or `--task-pattern` is given alone; empty on projects created before schema version 4 | `auto`, `jira`, `linear`, `github`, `custom` (or empty on old projects) | One of the values | How tasks are numbered. Empty on existing projects, which keep using `task_pattern` only. |
+| `task_prefix` | `--task-prefix` | `T` in `auto` mode; empty otherwise | 1-5 capital letters, `auto` mode only | At most 5 characters | Prefix of the `auto` mode. |
+| `task_url` | `--task-url` | empty | empty, or an `http://` or `https://` URL containing `{task}` | At most 500 characters | Template that turns a task into a link. |
 
 The flag `--path` sets the project root folder. It is not a configuration key.
 
 `--mode` is also validated by `init`: any value other than `project` or `machine` is refused with exit 3.
 
+## Task modes
+
+`init --tasks MODE` picks a mode. Each mode other than `custom` compiles to a `task_pattern`, which is what validates every task ID:
+
+| Mode | `task_pattern` | Example IDs |
+|---|---|---|
+| `auto` | `^(?P<base>PREFIX-\d{1,6})(?:\.(?P<ext>\d{1,3}))?$`, `PREFIX` is `task_prefix` (`^[A-Z]{1,5}$`, default `T`) | `T-1`, `T-2.1` |
+| `jira` | `^(?P<base>[A-Z][A-Z0-9]{1,9}-\d{1,6})(?:\.(?P<ext>\d{1,3}))?$` | `PROJ-123` |
+| `linear` | `^(?P<base>[A-Z]{1,10}-\d{1,6})(?:\.(?P<ext>\d{1,3}))?$` | `ENG-42` |
+| `github` | `^(?P<base>#\d{1,7})(?:\.(?P<ext>\d{1,3}))?$` | `#128` |
+| `custom` | the pattern given with `--task-pattern` | any |
+
+`--tasks` cannot be combined with `--task-pattern` (exit 2); `--task-pattern` alone means `custom`.
+
 ## Task pattern
+
+When no task flag is given, `init` stores mode `custom` with the default pattern above and prints a note on standard error. Existing projects are not changed.
 
 A task ID is any string that the pattern matches. Matching uses Go's regular expression engine (RE2), which runs in linear time.
 
@@ -88,4 +104,4 @@ database: /Users/example/Project/tidepool/.cairn/cairn.db
 
 - The `project` row is protected by immutability triggers. No command changes it.
 - To change a value, create a new project with the new configuration and import the notes. `import` validates each note against the receiving project's `repos` and `task_pattern`, so a note that does not fit is refused.
-- `cairn context` shows the values. `cairn context --json` prints the project object with the keys `name`, `mode`, `context`, `repos`, `default_repo`, `task_pattern`.
+- `cairn context` shows the values. `cairn context --json` prints the project object with the keys `name`, `mode`, `context`, `repos`, `default_repo`, `task_pattern`, and, when set, `task_mode`, `task_prefix`, `task_url`.

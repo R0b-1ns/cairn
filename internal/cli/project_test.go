@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/R0b-1ns/cairn/internal/model"
+	"github.com/R0b-1ns/cairn/internal/tasks"
 	_ "modernc.org/sqlite"
 )
 
@@ -274,4 +276,111 @@ func copyDir(t *testing.T, from, to string) {
 			t.Fatal(err)
 		}
 	}
+}
+
+func contextJSON(t *testing.T, e *testEnv) map[string]any {
+	t.Helper()
+	var m map[string]any
+	if err := json.Unmarshal([]byte(e.mustRun("context", "--json").out), &m); err != nil {
+		t.Fatal(err)
+	}
+	return m
+}
+
+func TestInitTasksAuto(t *testing.T) {
+	e := newEnv(t)
+	e.initProject("--tasks", "auto", "--task-prefix", "FEAT")
+	m := contextJSON(t, e)
+	want, _ := tasks.Pattern("auto", "FEAT")
+	if m["task_mode"] != "auto" || m["task_prefix"] != "FEAT" || m["task_pattern"] != want {
+		t.Fatalf("got %v", m)
+	}
+}
+
+func TestInitTasksAutoDefaultPrefix(t *testing.T) {
+	e := newEnv(t)
+	e.initProject("--tasks", "auto")
+	if m := contextJSON(t, e); m["task_prefix"] != "T" {
+		t.Fatalf("got %v", m)
+	}
+}
+
+func TestInitTasksJiraWithURL(t *testing.T) {
+	e := newEnv(t)
+	e.initProject("--tasks", "jira", "--task-url", "https://x.atlassian.net/browse/{task}")
+	m := contextJSON(t, e)
+	want, _ := tasks.Pattern("jira", "")
+	if m["task_mode"] != "jira" || m["task_pattern"] != want || m["task_url"] != "https://x.atlassian.net/browse/{task}" {
+		t.Fatalf("got %v", m)
+	}
+}
+
+func TestInitTasksFlagErrors(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		code int
+	}{
+		{"conflict", []string{"--tasks", "jira", "--task-pattern", "x"}, ExitUsage},
+		{"invalid prefix", []string{"--tasks", "auto", "--task-prefix", "ab1"}, ExitValidation},
+		{"prefix without auto", []string{"--tasks", "jira", "--task-prefix", "AB"}, ExitValidation},
+		{"bad url", []string{"--tasks", "jira", "--task-url", "https://x/y"}, ExitValidation},
+		{"unknown mode", []string{"--tasks", "bogus"}, ExitValidation},
+		{"custom needs pattern", []string{"--tasks", "custom"}, ExitValidation},
+	}
+	for _, tc := range cases {
+		e := newEnv(t)
+		r := e.run(append([]string{"init", "--name", "p", "--repos", "a"}, tc.args...)...)
+		if r.code != tc.code {
+			t.Errorf("%s: exit %d, want %d (%s)", tc.name, r.code, tc.code, r.err)
+		}
+		if exists(filepath.Join(e.root, ".cairn")) {
+			t.Errorf("%s: database created", tc.name)
+		}
+	}
+	e := newEnv(t)
+	if r := e.run("init", "--name", "p", "--repos", "a", "--tasks", "bogus"); !strings.Contains(r.err, "auto") || !strings.Contains(r.err, "github") {
+		t.Errorf("unknown mode must list valid modes: %s", r.err)
+	}
+}
+
+func TestInitLegacyDefaultWithHint(t *testing.T) {
+	e := newEnv(t)
+	r := e.mustRun("init", "--name", "p", "--repos", "a")
+	hint := "cairn: note: task numbering was not chosen; using the default TP-03 format (see --tasks)\n"
+	if strings.Count(r.err, "task numbering was not chosen") != 1 || !strings.Contains(r.err, hint) {
+		t.Fatalf("stderr: %q", r.err)
+	}
+	m := contextJSON(t, e)
+	if m["task_mode"] != "custom" || m["task_pattern"] != model.DefaultTaskPattern {
+		t.Fatalf("got %v", m)
+	}
+	e.mustRun(addWithTask("a", "TP-03")...)
+}
+
+func TestInitNoHintWhenTaskFlagGiven(t *testing.T) {
+	e := newEnv(t)
+	r := e.mustRun("init", "--name", "p", "--repos", "a", "--tasks", "github", "--no-input")
+	if strings.Contains(r.err, "task numbering") {
+		t.Fatalf("unexpected hint: %q", r.err)
+	}
+}
+
+func TestExistingCustomPatternUnchanged(t *testing.T) {
+	e := newEnv(t)
+	e.initProject("--task-pattern", `^(?P<base>[A-Z]+-\d+)(?:/(?P<ext>[a-z]+))?$`)
+	if m := contextJSON(t, e); m["task_mode"] != "custom" {
+		t.Fatalf("got %v", m)
+	}
+	if r := e.run(addWithTask("server", "TP-3/api")...); r.code != 0 {
+		t.Fatalf("TP-3/api: %+v", r)
+	}
+	if r := e.run(addWithTask("server", "tp-3")...); r.code != ExitValidation {
+		t.Fatalf("tp-3: %+v", r)
+	}
+}
+
+// addWithTask is a minimal valid flag-mode add for the given repo and task.
+func addWithTask(repo, task string) []string {
+	return withFlags(append(noneBut("change"), "--change", "x", "--repo", repo, "--task", task)...)
 }
