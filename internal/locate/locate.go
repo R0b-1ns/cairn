@@ -243,6 +243,15 @@ func fromPointer(reg *registry.Registry, childRoot string, p Pointer) (Location,
 	if err != nil {
 		return Location{}, err
 	}
+	linked, ok := e.Children[p.Repo]
+	if !ok || !samePath(linked, childRoot) {
+		return Location{}, fmt.Errorf("%w: the folder %s points to project %q as repo %q, but that project has no such child at this path; if you trust it, run: cairn project link --project %s %s %s",
+			ErrNoProject, childRoot, p.Parent, p.Repo, p.Parent, p.Repo, childRoot)
+	}
+	if p.ParentID != "" && e.ID != "" && p.ParentID != e.ID {
+		return Location{}, fmt.Errorf("%w: the pointer in %s belongs to another project also named %q (id %s, the registered one is %s); to detach this folder, run from it: cairn project unlink",
+			ErrNoProject, childRoot, p.Parent, p.ParentID, e.ID)
+	}
 	loc, err := fromEntry(reg, e)
 	if err != nil {
 		return Location{}, err

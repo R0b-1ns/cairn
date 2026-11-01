@@ -115,10 +115,6 @@ func warnIDMismatch(c *Ctx, reg *registry.Registry, loc locate.Location, st *sto
 				loc.Name, e.ID, loc.Root, ls.ID, loc.Name, loc.Root)
 		}
 	}
-	if loc.Attached && loc.ParentID != "" && loc.ParentID != ls.ID {
-		fmt.Fprintf(c.Stderr, "cairn: warning: the repo at %s points to parent %q with id %s, but the registered project %q has id %s; check that %s is the right project\n",
-			loc.ChildRoot, loc.Name, loc.ParentID, loc.Name, ls.ID, loc.Name)
-	}
 }
 
 func isNoProject(err error) bool { return errors.Is(err, locate.ErrNoProject) }

@@ -410,6 +410,9 @@ func TestFindFollowsAttachedPointer(t *testing.T) {
 	if err := WritePointer(child, Pointer{Parent: "shop", ParentID: "p-0123456789", Repo: "web"}); err != nil {
 		t.Fatal(err)
 	}
+	if err := reg.SetChild("shop", "web", child); err != nil {
+		t.Fatal(err)
+	}
 	loc, err := Find(filepath.Join(child, "sub"), "", reg)
 	if err != nil {
 		t.Fatal(err)
@@ -419,6 +422,51 @@ func TestFindFollowsAttachedPointer(t *testing.T) {
 	}
 	if loc.Name != "shop" || loc.Mode != "project" || loc.Root != parent || loc.DBPath != filepath.Join(parent, ".cairn", "cairn.db") {
 		t.Fatalf("must resolve to the parent: %+v", loc)
+	}
+}
+
+func TestFindAttachedRequiresLinkedPath(t *testing.T) {
+	base := tempBase(t)
+	reg := newReg(base)
+	registerProject(t, reg, "shop", filepath.Join(base, "P"))
+	child := filepath.Join(base, "C")
+	mkdirAll(t, child)
+	if err := WritePointer(child, Pointer{Parent: "shop", Repo: "web"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Find(child, "", reg)
+	if !errors.Is(err, ErrNoProject) || !strings.Contains(err.Error(), "cairn project link --project shop web "+child) {
+		t.Fatalf("want link command, got %v", err)
+	}
+	other := filepath.Join(base, "D")
+	mkdirAll(t, other)
+	if err := reg.SetChild("shop", "web", other); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Find(child, "", reg); err == nil || !strings.Contains(err.Error(), "cairn project link --project") {
+		t.Fatalf("a different linked path must not count, got %v", err)
+	}
+}
+
+func TestFindAttachedParentIDMismatchRefused(t *testing.T) {
+	base := tempBase(t)
+	reg := newReg(base)
+	parent := filepath.Join(base, "P")
+	stubDB(t, parent)
+	if err := reg.Register(registry.Entry{Name: "shop", Mode: "project", Path: parent, ID: "p-aaaaaaaaaa"}); err != nil {
+		t.Fatal(err)
+	}
+	child := filepath.Join(base, "C")
+	mkdirAll(t, child)
+	if err := WritePointer(child, Pointer{Parent: "shop", ParentID: "p-bbbbbbbbbb", Repo: "web"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.SetChild("shop", "web", child); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Find(child, "", reg)
+	if !errors.Is(err, ErrNoProject) || !strings.Contains(err.Error(), "cairn project unlink") {
+		t.Fatalf("want refusal naming unlink, got %v", err)
 	}
 }
 

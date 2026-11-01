@@ -482,6 +482,9 @@ func attachChild(t *testing.T, e *testEnv, repo, parentID string) string {
 	if err := locate.WritePointer(child, locate.Pointer{Parent: "tidepool", ParentID: parentID, Repo: repo}); err != nil {
 		t.Fatal(err)
 	}
+	if err := registry.Open(e.home).SetChild("tidepool", repo, child); err != nil {
+		t.Fatal(err)
+	}
 	return child
 }
 
@@ -592,22 +595,23 @@ func TestRegistryIDMismatchWarns(t *testing.T) {
 	}
 }
 
-func TestPointerParentIDMismatchWarns(t *testing.T) {
+func TestPointerParentIDMismatchRefused(t *testing.T) {
 	e := newAddEnv(t)
 	child := attachChild(t, e, "web", "p-yyyyyyyyyy")
 	r := e.runIn(child, "", "context")
-	if r.code != 0 || !strings.Contains(r.err, "cairn: warning") {
+	if r.code == 0 || !strings.Contains(r.err, "cairn project unlink") {
 		t.Fatalf("mismatch: %+v", r)
 	}
 	id, _ := tidepoolStore(t, e.root).EnsureProjectID()
-	ok := realTemp(t)
-	locate.WritePointer(ok, locate.Pointer{Parent: "tidepool", ParentID: id, Repo: "web"})
-	if r := e.runIn(ok, "", "context"); r.code != 0 || strings.Contains(r.err, "warning") {
+	ok := attachChild(t, e, "api", id)
+	if r := e.runIn(ok, "", "context"); r.code != 0 {
 		t.Fatalf("match: %+v", r)
 	}
-	empty := realTemp(t)
-	locate.WritePointer(empty, locate.Pointer{Parent: "tidepool", Repo: "web"})
-	if r := e.runIn(empty, "", "context"); r.code != 0 || strings.Contains(r.err, "warning") {
-		t.Fatalf("empty: %+v", r)
+	// an unlinked folder is refused with the exact link command
+	stray := realTemp(t)
+	locate.WritePointer(stray, locate.Pointer{Parent: "tidepool", Repo: "web"})
+	r = e.runIn(stray, "", "context")
+	if r.code == 0 || !strings.Contains(r.err, "cairn project link --project tidepool web "+stray) {
+		t.Fatalf("stray: %+v", r)
 	}
 }
