@@ -72,6 +72,7 @@ Exit code 3: the name has an uppercase letter.
 
 ## Notes
 
+- After a successful `init`, cairn asks GitHub for the latest release (3 seconds at most). If it differs from the installed version, one line goes to standard error: `cairn: a new version is available (1.2.0, installed: 1.0.0); install it with 'cairn update'`. Standard output, the exit code and the project are not affected, and any network problem is silent. Set `CAIRN_NO_UPDATE_CHECK` to any non-empty value to skip the check; development builds never check.
 - `init` creates no notes. Start with `cairn add`.
 - `--repos` is required. The names given here are the only values that `cairn add --repo` and `--impact` accept for this project.
 - The default task pattern accepts `TP-03`, `TP-03.1` and `ABCDE-1234`. Pass `--task-pattern` only when the task IDs differ.
