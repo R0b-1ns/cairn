@@ -290,7 +290,9 @@ func TestViewSanitizesSiteText(t *testing.T) {
 		Agent: "build\u202eer", Repo: "server", Task: "TP-03", Model: "claude\x1b[31m-test",
 		At: "2026-10-30T10:00:00Z", Title: "Evil \x1b[2Jtitle\u202e", Status: model.StatusDone,
 		Entries: []model.Entry{{Type: model.TypeDecision, By: "user", Text: "Bad \x1b]0;pwn\x07 text\u202e\x1b[31m"}},
-		None:    []model.EntryType{model.TypeChange, model.TypeOpen, model.TypeNote, model.TypeHelper},
+		// The Markdown renderer prints "none" as stored, so only a final clean removes these.
+		None:    []model.EntryType{model.TypeChange, model.TypeOpen, model.TypeNote, model.TypeHelper, "helper\x1b[1m\u202e"},
+		Commits: []string{"abc1234\u202e"},
 	})
 	if err != nil {
 		t.Fatalf("insert raw note: %v", err)

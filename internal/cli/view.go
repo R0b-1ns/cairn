@@ -45,9 +45,10 @@ var serveContext = func() (context.Context, context.CancelFunc) {
 	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 }
 
-// sanitizeSite runs every stored text that reaches the site through sanitize, as
-// terminal output is: a hostile database must not put escape sequences or
-// invisible and direction-changing characters into the pages or data.js.
+// sanitizeSite runs every stored value of the site's structured fields through
+// sanitize, as terminal output is: a hostile database must not put escape
+// sequences or invisible and direction-changing characters into the pages or
+// data.js. The rendered Markdown is cleaned separately, as a whole.
 func sanitizeSite(site *view.Site) {
 	list := func(l []string) {
 		for i := range l {
@@ -81,6 +82,9 @@ func sanitizeSite(site *view.Site) {
 		n.Status = model.Status(sanitize(string(n.Status)))
 		for j := range n.Entries {
 			entry(&n.Entries[j])
+		}
+		for j := range n.None {
+			n.None[j] = model.EntryType(sanitize(string(n.None[j])))
 		}
 		list(n.Impacts)
 		list(n.Commits)
@@ -152,15 +156,18 @@ func defineView(fs *flag.FlagSet) Handler {
 		if err != nil {
 			return fail(c, ExitRuntime, "%v", err)
 		}
-		sanitizeSite(site)
-		site.MarkdownHeader = renderMarkdownHeader(s.Proj)
+		// The Markdown is rendered from the stored values, exactly as export does (it
+		// looks entries up by their stored IDs), and then cleaned as a whole.
+		site.MarkdownHeader = sanitize(renderMarkdownHeader(s.Proj))
 		for i := range site.Notes {
 			nv := &site.Notes[i]
 			doc := exportDoc{Project: s.Proj, Notes: []model.Note{nv.Note}, Addenda: nv.Addenda}
 			if nv.Markdown, err = renderMarkdownNotes(s, doc); err != nil {
 				return fail(c, ExitRuntime, "%v", err)
 			}
+			nv.Markdown = sanitize(nv.Markdown)
 		}
+		sanitizeSite(site)
 		dir := filepath.Join(filepath.Dir(s.St.Path()), "view")
 		if err := view.Write(dir, site); err != nil {
 			return fail(c, ExitRuntime, "%v", err)
