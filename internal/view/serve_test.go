@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const wantCSP = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'"
+const wantCSP = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
 // served is a running Serve: its URL, port, and how to stop it.
 type served struct {
@@ -115,6 +115,67 @@ func checkSecurityHeaders(t *testing.T, target string, resp *http.Response) {
 	}
 	if h.Get("Referrer-Policy") != "no-referrer" {
 		t.Errorf("%s: Referrer-Policy %q", target, h.Get("Referrer-Policy"))
+	}
+	if h.Get("Cross-Origin-Resource-Policy") != "same-origin" {
+		t.Errorf("%s: Cross-Origin-Resource-Policy %q", target, h.Get("Cross-Origin-Resource-Policy"))
+	}
+}
+
+// fetchSite sends a GET for target with the right Host and, when site is not
+// empty, the Sec-Fetch-Site header a browser adds.
+func fetchSite(t *testing.T, s *served, target, site string) (*http.Response, string) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, s.url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.URL.Opaque = target
+	req.Host = "127.0.0.1:" + strconv.Itoa(s.port)
+	if site != "" {
+		req.Header.Set("Sec-Fetch-Site", site)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("GET %s: %v", target, err)
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp, string(b)
+}
+
+// A page of another origin can include <script src="http://127.0.0.1:PORT/data.js">:
+// the browser sends this server's own Host, so only Sec-Fetch-Site and CORP stop it.
+func TestServeRefusesCrossSiteRequests(t *testing.T) {
+	s, dir := serveSite(t)
+	for _, target := range []string{"/data.js", "/", "/notes/n-aaaaaa.md", "/assets/app.js"} {
+		for _, site := range []string{"cross-site", "same-site", "Cross-Site", "bogus"} {
+			resp, body := fetchSite(t, s, target, site)
+			if resp.StatusCode != http.StatusForbidden {
+				t.Errorf("%s with Sec-Fetch-Site %q: status %d, want 403", target, site, resp.StatusCode)
+			}
+			if strings.Contains(body, "tidepool") || strings.Contains(body, "CAIRN") {
+				t.Errorf("%s with Sec-Fetch-Site %q: content served", target, site)
+			}
+			checkSecurityHeaders(t, target, resp)
+		}
+		for _, site := range []string{"same-origin", "none", ""} {
+			resp, body := fetchSite(t, s, target, site)
+			if resp.StatusCode != http.StatusOK {
+				t.Errorf("%s with Sec-Fetch-Site %q: status %d, want 200", target, site, resp.StatusCode)
+				continue
+			}
+			file := strings.TrimPrefix(target, "/")
+			if file == "" {
+				file = "index.html"
+			}
+			if body != readFile(t, dir, file) {
+				t.Errorf("%s with Sec-Fetch-Site %q: body differs", target, site)
+			}
+			checkSecurityHeaders(t, target, resp)
+		}
 	}
 }
 

@@ -31,6 +31,7 @@ Threats cairn is built against, the mitigation for each, and what remains. Every
 - The server listens on 127.0.0.1 only. It accepts only the Host `127.0.0.1:<port>` or `localhost:<port>`, and refuses any other with 403.
 - It serves only `.html`, `.css`, `.js` and `.md` files from the `view` folder, never a dotfile, and only GET and HEAD requests.
 - Every response carries a strict Content-Security-Policy (`default-src 'none'`; scripts and styles only from the site itself).
+- A page of another website cannot read the site: a request whose `Sec-Fetch-Site` header is not `same-origin` or `none` is refused with 403, every response carries `Cross-Origin-Resource-Policy: same-origin`, and `frame-ancestors 'none'` forbids framing.
 - The site is a copy and is not authoritative. The command never writes to the database.
 
 Code: `internal/view/serve.go`, `internal/view/write.go`.

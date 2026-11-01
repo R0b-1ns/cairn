@@ -14,8 +14,9 @@ import (
 )
 
 // csp allows only same-origin scripts and styles: the pages carry no inline
-// script or style, and downloads are navigations, not fetches.
-const csp = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'"
+// script or style, and downloads are navigations, not fetches. No other page
+// may frame the site.
+const csp = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
 // contentTypes lists the only kinds of file the site contains; anything else is 404.
 var contentTypes = map[string]string{
@@ -86,6 +87,8 @@ func siteHandler(fsys fs.FS, port int) http.Handler {
 		h.Set("Content-Security-Policy", csp)
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "no-referrer")
+		// A page of another origin may not embed any file, e.g. data.js as a script.
+		h.Set("Cross-Origin-Resource-Policy", "same-origin")
 
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			h.Set("Allow", "GET, HEAD")
@@ -94,7 +97,7 @@ func siteHandler(fsys fs.FS, port int) http.Handler {
 		}
 		// An exact match defeats DNS rebinding: a page from another origin
 		// reaching this port sends its own host name.
-		if !hosts[r.Host] {
+		if !hosts[r.Host] || !sameOriginFetch(r) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
@@ -125,6 +128,19 @@ func siteHandler(fsys fs.FS, port int) http.Handler {
 		h.Set("Cache-Control", "no-cache")
 		http.ServeContent(w, r, name, fi.ModTime(), f)
 	})
+}
+
+// sameOriginFetch reports whether the request comes from the site itself or from
+// the user (address bar, bookmark). A page of another origin that includes
+// <script src="http://127.0.0.1:PORT/data.js"> sends this server's own Host, so
+// the Host check alone cannot stop it; the browser's Sec-Fetch-Site header can.
+// A request without the header (an older browser, curl) is allowed.
+func sameOriginFetch(r *http.Request) bool {
+	v, ok := r.Header["Sec-Fetch-Site"]
+	if !ok {
+		return true
+	}
+	return len(v) == 1 && (v[0] == "same-origin" || v[0] == "none")
 }
 
 // siteName maps a decoded URL path to a name inside the site folder ("." for
