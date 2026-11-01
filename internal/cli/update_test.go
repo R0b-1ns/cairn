@@ -112,3 +112,52 @@ func TestUpdateRefusesADevBuild(t *testing.T) {
 		t.Fatalf("update: %+v", r)
 	}
 }
+
+func initArgs(e *testEnv) []string {
+	return []string{"init", "--name", "tidepool", "--repos", "server"}
+}
+
+func TestInitSaysWhenANewVersionExists(t *testing.T) {
+	updateSetup(t, fakeRelease(t, "v1.2.0", "x", "x"), "1.0.0")
+	e := newEnv(t)
+	r := e.run(initArgs(e)...)
+	if r.code != ExitOK || !strings.Contains(r.out, "initialized project tidepool") {
+		t.Fatalf("init: %+v", r)
+	}
+	if want := "a new version is available (1.2.0, installed: 1.0.0); install it with 'cairn update'"; !strings.Contains(r.err, want) {
+		t.Fatalf("stderr = %q, want it to contain %q", r.err, want)
+	}
+	if strings.Contains(r.out, "new version") {
+		t.Fatalf("the notice must stay off standard output: %q", r.out)
+	}
+}
+
+func TestInitStaysQuietWhenNothingToSay(t *testing.T) {
+	cases := map[string]func(t *testing.T, e *testEnv){
+		"current": func(t *testing.T, e *testEnv) { updateSetup(t, fakeRelease(t, "v1.2.0", "x", "x"), "1.2.0") },
+		"dev":     func(t *testing.T, e *testEnv) { updateSetup(t, fakeRelease(t, "v1.2.0", "x", "x"), "dev") },
+		"opt out": func(t *testing.T, e *testEnv) {
+			updateSetup(t, fakeRelease(t, "v1.2.0", "x", "x"), "1.0.0")
+			e.env["CAIRN_NO_UPDATE_CHECK"] = "1"
+		},
+		"unreachable": func(t *testing.T, e *testEnv) {
+			srv := httptest.NewServer(http.NotFoundHandler())
+			srv.Close()
+			updateSetup(t, srv.URL, "1.0.0")
+		},
+		"no redirect": func(t *testing.T, e *testEnv) {
+			srv := httptest.NewServer(http.NotFoundHandler())
+			t.Cleanup(srv.Close)
+			updateSetup(t, srv.URL, "1.0.0")
+		},
+	}
+	for name, setup := range cases {
+		t.Run(name, func(t *testing.T) {
+			e := newEnv(t)
+			setup(t, e)
+			if r := e.run(initArgs(e)...); r.code != ExitOK || r.err != "" {
+				t.Fatalf("init: %+v", r)
+			}
+		})
+	}
+}

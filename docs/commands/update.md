@@ -64,3 +64,4 @@ Installs v1.0.1, even if it is older than the installed version.
 - A build made without a release version (`go install`, `go build`) reports itself as `dev`; `cairn update` refuses it with exit code 1, so a source build is never replaced by mistake.
 - The checksum comes from the same GitHub release as the binary: it catches a corrupted or truncated download, not a compromised release.
 - It never touches notes or databases.
+- `cairn init` runs a short version check after creating a project and points here when a newer release exists; see `init.md`.

@@ -53,7 +53,7 @@ func defineUpdate(fs *flag.FlagSet) Handler {
 		}
 		if tag == "" {
 			var err error
-			if tag, err = latestTag(); err != nil {
+			if tag, err = latestTag(0); err != nil {
 				return fail(c, ExitRuntime, "update: %v", err)
 			}
 		}
@@ -75,9 +75,33 @@ func defineUpdate(fs *flag.FlagSet) Handler {
 	}
 }
 
-// latestTag reads the tag the "latest release" URL redirects to.
-func latestTag() (string, error) {
+// noticeTimeout bounds the version check that other commands run on the side.
+const noticeTimeout = 3 * time.Second
+
+// noticeNewVersion tells the user on standard error when a release other than
+// the installed one exists. It never fails the calling command: a build
+// without a release version, CAIRN_NO_UPDATE_CHECK, or any network problem
+// makes it say nothing.
+func noticeNewVersion(c *Ctx) {
+	if Version == "dev" || c.Getenv("CAIRN_NO_UPDATE_CHECK") != "" {
+		return
+	}
+	tag, err := latestTag(noticeTimeout)
+	if err != nil {
+		return
+	}
+	if latest := strings.TrimPrefix(tag, "v"); latest != strings.TrimPrefix(Version, "v") {
+		fmt.Fprintf(c.Stderr, "cairn: a new version is available (%s, installed: %s); install it with 'cairn update'\n", latest, strings.TrimPrefix(Version, "v"))
+	}
+}
+
+// latestTag reads the tag the "latest release" URL redirects to. A positive
+// timeout replaces the default one of the HTTP client.
+func latestTag(timeout time.Duration) (string, error) {
 	client := *updateClient
+	if timeout > 0 {
+		client.Timeout = timeout
+	}
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	resp, err := client.Get(updateBase + "/latest")
 	if err != nil {

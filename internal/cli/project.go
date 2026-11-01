@@ -98,6 +98,7 @@ func defineInit(fs *flag.FlagSet) Handler {
 			return fail(c, ExitRuntime, "%v", err)
 		}
 		fmt.Fprintf(c.Stdout, "initialized project %s (%s mode) at %s\ndatabase: %s\n", p.Name, p.Mode, root, dbPath)
+		noticeNewVersion(c)
 		return ExitOK
 	}
 }
