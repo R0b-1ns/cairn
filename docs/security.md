@@ -27,14 +27,14 @@ Threats cairn is built against, the mitigation for each, and what remains. Every
 
 `cairn view` writes a read-only website and can serve it.
 
-- Note text is escaped in the HTML and never inserted as HTML in the browser.
+- Every stored text that reaches the site (pages, `data.js`, Markdown downloads) first passes through the same sanitizer as terminal output, so escape sequences, control characters and Cf characters are removed. It is then escaped in the HTML and never inserted as HTML in the browser.
 - The server listens on 127.0.0.1 only. It accepts only the Host `127.0.0.1:<port>` or `localhost:<port>`, and refuses any other with 403.
 - It serves only `.html`, `.css`, `.js` and `.md` files from the `view` folder, never a dotfile, and only GET and HEAD requests.
 - Every response carries a strict Content-Security-Policy (`default-src 'none'`; scripts and styles only from the site itself).
 - A page of another website cannot read the site: a request whose `Sec-Fetch-Site` header is not `same-origin` or `none` is refused with 403, every response carries `Cross-Origin-Resource-Policy: same-origin`, and `frame-ancestors 'none'` forbids framing.
 - The site is a copy and is not authoritative. The command never writes to the database.
 
-Code: `internal/view/serve.go`, `internal/view/write.go`.
+Code: `internal/view/serve.go`, `internal/view/write.go`, `internal/cli/view.go` (`sanitizeSite`).
 
 ### Verifying a release
 

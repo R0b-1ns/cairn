@@ -278,3 +278,47 @@ func TestViewServeBindFailure(t *testing.T) {
 		t.Fatalf("exit %d, want %d (%s)", r.code, ExitRuntime, r.err)
 	}
 }
+
+// Only a hostile cloned database can hold escape sequences or direction overrides;
+// the site must drop them as the terminal output does.
+func TestViewSanitizesSiteText(t *testing.T) {
+	e := newAddEnv(t)
+	s := openStore(t, e)
+	n, err := s.InsertNote(model.Note{
+		Agent: "build\u202eer", Repo: "server", Task: "TP-03", Model: "claude\x1b[31m-test",
+		At: "2026-10-30T10:00:00Z", Title: "Evil \x1b[2Jtitle\u202e", Status: model.StatusDone,
+		Entries: []model.Entry{{Type: model.TypeDecision, By: "user", Text: "Bad \x1b]0;pwn\x07 text\u202e\x1b[31m"}},
+		None:    []model.EntryType{model.TypeChange, model.TypeOpen, model.TypeNote, model.TypeHelper},
+	})
+	if err != nil {
+		t.Fatalf("insert raw note: %v", err)
+	}
+	mustAddendum(t, e, model.Addendum{NoteID: n.ID, Agent: "rev\x1b[1miewer", Model: "m", At: "2026-10-31T09:00:00Z",
+		Entries: []model.Entry{{Type: model.TypeNote, Text: "late \u202enote"}}})
+	s.Close()
+	noBrowser(t)
+	if r := e.run("view"); r.code != ExitOK {
+		t.Fatalf("view: %+v", r)
+	}
+	dir := filepath.Join(e.root, ".cairn", "view")
+	for _, f := range []string{"index.html", "decisions.html", "notes/" + n.ID + ".html", "notes/" + n.ID + ".md", "data.js"} {
+		b, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(f)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := string(b)
+		for _, bad := range []string{"\x1b", "\\u001b", "\u202e", "\x07", "\\u0007", "[2J", "[31m", "[1m", "0;pwn"} {
+			if strings.Contains(body, bad) {
+				t.Errorf("%s contains %q", f, bad)
+			}
+		}
+		for _, want := range []string{"Evil title", "builder"} {
+			if f != "decisions.html" && !strings.Contains(body, want) {
+				t.Errorf("%s lacks %q", f, want)
+			}
+		}
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "decisions.html")); !strings.Contains(string(b), "Bad  text") {
+		t.Errorf("decisions.html lacks the cleaned decision text")
+	}
+}

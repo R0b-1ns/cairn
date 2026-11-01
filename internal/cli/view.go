@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/R0b-1ns/cairn/internal/model"
+	"github.com/R0b-1ns/cairn/internal/store"
 	"github.com/R0b-1ns/cairn/internal/view"
 )
 
@@ -42,6 +43,72 @@ func defaultOpenBrowser(url string) error {
 // serveContext is the lifetime of `view --serve`: until Ctrl-C or SIGTERM. Tests replace it.
 var serveContext = func() (context.Context, context.CancelFunc) {
 	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+}
+
+// sanitizeSite runs every stored text that reaches the site through sanitize, as
+// terminal output is: a hostile database must not put escape sequences or
+// invisible and direction-changing characters into the pages or data.js.
+func sanitizeSite(site *view.Site) {
+	list := func(l []string) {
+		for i := range l {
+			l[i] = sanitize(l[i])
+		}
+	}
+	entry := func(e *model.Entry) {
+		e.ID, e.Text, e.By = sanitize(e.ID), sanitize(e.Text), sanitize(e.By)
+		e.Type = model.EntryType(sanitize(string(e.Type)))
+	}
+	info := func(e *store.EntryInfo) {
+		entry(&e.Entry)
+		for _, f := range []*string{&e.NoteID, &e.AddendumID, &e.Task, &e.Repo, &e.At, &e.ClosedBy, &e.ClosedAt} {
+			*f = sanitize(*f)
+		}
+	}
+	p := &site.Project
+	p.Name, p.Context = sanitize(p.Name), sanitize(p.Context)
+	for i := range site.Notes {
+		nv := &site.Notes[i]
+		h := &nv.Header
+		for _, f := range []*string{&h.ID, &h.Task, &h.Repo, &h.Agent, &h.Model, &h.At, &h.Title} {
+			*f = sanitize(*f)
+		}
+		h.Status = model.Status(sanitize(string(h.Status)))
+		nv.Written = model.Status(sanitize(string(nv.Written)))
+		n := &nv.Note
+		for _, f := range []*string{&n.ID, &n.Agent, &n.Repo, &n.At, &n.Task, &n.Model, &n.Title} {
+			*f = sanitize(*f)
+		}
+		n.Status = model.Status(sanitize(string(n.Status)))
+		for j := range n.Entries {
+			entry(&n.Entries[j])
+		}
+		list(n.Impacts)
+		list(n.Commits)
+		list(n.Resolves)
+		list(n.Supersedes)
+		for j := range nv.Addenda {
+			a := &nv.Addenda[j]
+			for _, f := range []*string{&a.ID, &a.NoteID, &a.Agent, &a.Model, &a.At} {
+				*f = sanitize(*f)
+			}
+			a.Status = model.Status(sanitize(string(a.Status)))
+			for k := range a.Entries {
+				entry(&a.Entries[k])
+			}
+			list(a.Resolves)
+			list(a.Supersedes)
+		}
+		states := make(map[string]store.EntryInfo, len(nv.States))
+		for _, st := range nv.States {
+			info(&st)
+			states[st.ID] = st
+		}
+		nv.States = states
+	}
+	for i := range site.Entries {
+		info(&site.Entries[i].EntryInfo)
+		site.Entries[i].Agent = sanitize(site.Entries[i].Agent)
+	}
 }
 
 type viewResult struct {
@@ -85,6 +152,7 @@ func defineView(fs *flag.FlagSet) Handler {
 		if err != nil {
 			return fail(c, ExitRuntime, "%v", err)
 		}
+		sanitizeSite(site)
 		site.MarkdownHeader = renderMarkdownHeader(s.Proj)
 		for i := range site.Notes {
 			nv := &site.Notes[i]
