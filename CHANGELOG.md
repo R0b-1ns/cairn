@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.0](https://github.com/R0b-1ns/cairn/compare/v1.1.0...v1.2.0) (2026-11-01)
+
+
+### Features
+
+* **init:** say on stderr when a newer release exists ([f896777](https://github.com/R0b-1ns/cairn/commit/f8967778217e3bddf652f8bec034a03e00133328))
+* **update:** add cairn update and a new-version notice on init ([b2aadaf](https://github.com/R0b-1ns/cairn/commit/b2aadaf4b4cd21bf90727aa6b2c8f3f71f0eb203))
+* **update:** add cairn update, which replaces the binary after checking its SHA-256 ([f1bd5e8](https://github.com/R0b-1ns/cairn/commit/f1bd5e8e05523a936d7ac211334a85d762c7c9a1))
+
 ## [1.1.0](https://github.com/R0b-1ns/cairn/compare/v1.0.1...v1.1.0) (2026-11-01)
 
 
