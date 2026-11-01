@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -135,14 +136,42 @@ func defineShow(fs *flag.FlagSet) Handler {
 			return code
 		}
 		defer s.Close()
+		sc := openScope(c, s)
+		defer sc.Close()
+		var found []source
+		for _, src := range sc.Sources {
+			ok, err := hasID(src.St, kind, args[0])
+			if err != nil {
+				return fail(c, ExitRuntime, "%v", err)
+			}
+			if ok {
+				found = append(found, src)
+			}
+		}
+		if len(found) > 1 {
+			var names []string
+			for _, src := range found {
+				if src.Child == "" {
+					names = append(names, sanitize(s.Proj.Name)+" (current project)")
+				} else {
+					names = append(names, "child "+sanitize(src.Child))
+				}
+			}
+			return fail(c, ExitRuntime, "%s exists in more than one database: %s; run the command inside the one you mean", args[0], strings.Join(names, ", "))
+		}
+		cs, child := s, ""
+		if len(found) == 1 && found[0].Child != "" {
+			child = found[0].Child
+			cs = &session{St: found[0].St, Proj: found[0].Proj, Reg: s.Reg, Loc: s.Loc}
+		}
 		var err error
 		switch kind {
 		case 'n':
-			err = showNote(c, s, args[0], f.json)
+			err = showNote(c, cs, args[0], f.json, child)
 		case 'a':
-			err = showAddendum(c, s, args[0], f.json)
+			err = showAddendum(c, cs, args[0], f.json, child)
 		default:
-			err = showEntry(c, s, args[0], f.json)
+			err = showEntry(c, cs, args[0], f.json, child)
 		}
 		if errors.Is(err, store.ErrNotFound) {
 			return fail(c, ExitRuntime, "%s not found", args[0])
@@ -176,7 +205,7 @@ func links(c *Ctx, pad string, resolves, supersedes []string) {
 	}
 }
 
-func showNote(c *Ctx, s *session, id string, asJSON bool) error {
+func showNote(c *Ctx, s *session, id string, asJSON bool, child string) error {
 	n, err := s.St.GetNote(id)
 	if err != nil {
 		return err
@@ -203,10 +232,12 @@ func showNote(c *Ctx, s *session, id string, asJSON bool) error {
 			CurrentStatus model.Status     `json:"current_status"`
 			Addenda       []model.Addendum `json:"addenda"`
 			Refs          []string         `json:"refs,omitempty"`
-		}{n, cur, nonNil(add), refs})
+			Child         string           `json:"child,omitempty"`
+		}{n, cur, nonNil(add), refs, child})
 		return nil
 	}
 	fmt.Fprintf(c.Stdout, "%s  %s\n", n.ID, sanitize(n.Title))
+	childLine(c, child)
 	task := n.Task
 	if task == "" {
 		task = "-"
@@ -262,16 +293,20 @@ func showNote(c *Ctx, s *session, id string, asJSON bool) error {
 	return nil
 }
 
-func showAddendum(c *Ctx, s *session, id string, asJSON bool) error {
+func showAddendum(c *Ctx, s *session, id string, asJSON bool, child string) error {
 	a, err := s.St.GetAddendum(id)
 	if err != nil {
 		return err
 	}
 	if asJSON {
-		printJSON(c, a)
+		printJSON(c, struct {
+			model.Addendum
+			Child string `json:"child,omitempty"`
+		}{a, child})
 		return nil
 	}
 	fmt.Fprintf(c.Stdout, "%s  addendum to note %s\n", a.ID, a.NoteID)
+	childLine(c, child)
 	fmt.Fprintf(c.Stdout, "agent: %s   model: %s   at: %s\n", sanitize(a.Agent), sanitize(a.Model), a.At)
 	if a.Status != "" {
 		fmt.Fprintf(c.Stdout, "status: %s\n", a.Status)
@@ -293,11 +328,12 @@ func showAddendum(c *Ctx, s *session, id string, asJSON bool) error {
 	return nil
 }
 
-func showEntry(c *Ctx, s *session, id string, asJSON bool) error {
+func showEntry(c *Ctx, s *session, id string, asJSON bool, child string) error {
 	e, err := s.St.Entry(id)
 	if err != nil {
 		return err
 	}
+	e.Child = child
 	if asJSON {
 		printJSON(c, e)
 		return nil
@@ -307,8 +343,41 @@ func showEntry(c *Ctx, s *session, id string, asJSON bool) error {
 		loc += " via addendum " + e.AddendumID
 	}
 	fmt.Fprintf(c.Stdout, "%s  %s  %s\n", e.ID, e.Type, loc)
+	childLine(c, child)
 	fmt.Fprintln(c.Stdout, fullEntry(e, ""))
 	return nil
+}
+
+// childLabel is the suffix that marks a result from a local child.
+func childLabel(child string) string {
+	if child == "" {
+		return ""
+	}
+	return "  [" + sanitize(child) + "]"
+}
+
+// childLine prints "child: <name>" for a result from a local child.
+func childLine(c *Ctx, child string) {
+	if child != "" {
+		fmt.Fprintf(c.Stdout, "child: %s\n", sanitize(child))
+	}
+}
+
+// hasID reports whether the database holds the note, addendum or entry id.
+func hasID(st *store.Store, kind byte, id string) (bool, error) {
+	var err error
+	switch kind {
+	case 'n':
+		_, err = st.GetNote(id)
+	case 'a':
+		_, err = st.GetAddendum(id)
+	default:
+		_, err = st.Entry(id)
+	}
+	if errors.Is(err, store.ErrNotFound) {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 // parseTime reads YYYY-MM-DD or RFC3339 and returns the exclusive-bound string used by the store.
@@ -391,15 +460,37 @@ func defineList(fs *flag.FlagSet) Handler {
 		}
 		defer s.Close()
 		if task != "" {
-			tf, ok := taskFilter(s.Proj, task)
-			if !ok {
+			if _, ok := taskFilter(s.Proj, task); !ok {
 				return fail(c, ExitUsage, "%q does not match the task pattern %s", task, s.Proj.TaskPattern)
 			}
-			flt.TaskBase, flt.Task = tf.TaskBase, tf.Task
 		}
-		items, total, err := s.St.ListEntries(flt)
-		if err != nil {
-			return fail(c, ExitRuntime, "%v", err)
+		sc := openScope(c, s)
+		defer sc.Close()
+		var items []store.EntryInfo
+		total := 0
+		for _, src := range sc.Sources {
+			sf := flt
+			if task != "" {
+				tf, ok := taskFilter(src.Proj, task)
+				if !ok {
+					continue // this source numbers its tasks differently
+				}
+				sf.TaskBase, sf.Task = tf.TaskBase, tf.Task
+			}
+			part, n, err := src.St.ListEntries(sf)
+			if err != nil {
+				return fail(c, ExitRuntime, "%v", err)
+			}
+			for i := range part {
+				part[i].Child = src.Child
+			}
+			items = append(items, part...)
+			total += n
+		}
+		// Newest first across sources, the key of the single-database query.
+		sort.SliceStable(items, func(i, j int) bool { return items[i].At > items[j].At })
+		if len(items) > f.max {
+			items = items[:f.max]
 		}
 		if f.json {
 			printJSON(c, nonNil(items))
@@ -419,7 +510,7 @@ func defineList(fs *flag.FlagSet) Handler {
 				by = "[" + e.By + "] "
 			}
 			fmt.Fprintf(c.Stdout, "%s  %-8s %s  %s  %s  %s%s%s  %s\n", e.ID, e.Type, sanitize(t), sanitize(e.Repo),
-				day(e.At), by, clip(sanitize(e.Text), textWidth), stateMarker(e), e.NoteID)
+				day(e.At), by, clip(sanitize(e.Text), textWidth), stateMarker(e), e.NoteID+childLabel(e.Child))
 		}
 		if total > len(items) {
 			fmt.Fprintf(c.Stdout, "... %d more (raise --max)\n", total-len(items))

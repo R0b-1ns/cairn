@@ -38,6 +38,10 @@ The kind column is `title` for a note title and the entry type for an entry. The
 
 `--json` prints an array of objects with the keys `kind` (`note` or `entry`), `id`, `note_id`, `addendum_id`, `type` (empty for a title), and `text` (the real stored text of the entry or title, not the search index copy). `--max` applies. An empty result is `[]`.
 
+## Local children
+
+When the project is the parent of local children (see `cairn project link`), `search` also reads each active local child, read-only and in link order, after the current project. A hit from a child ends with `  [<child>]`; hits of the current project look as before. With `--json` the array keeps its shape and a child hit gains the key `child`. `--max` applies to the merged list (current project first, then children in link order) and the `... N more` count adds up every database. Reading goes one way, parent to child: a search run inside a local child returns only that child's notes. A child that cannot be read (folder unknown on this machine, no database, another project, older schema) is skipped, and a line `cairn: warning: local child <name> was not read: ...` on standard error names the command to run (`cairn project link --project <parent> <name> <path>`); the output and the exit code are not affected. An attached child keeps its notes in the parent database, so nothing changes for it.
+
 ## Exit codes
 
 - `0`: searched (including `no matches`).
