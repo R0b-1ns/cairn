@@ -180,6 +180,9 @@ func defineView(fs *flag.FlagSet) Handler {
 		open = false
 		ctx, cancel := serveContext()
 		defer cancel()
+		// Give the signals back as soon as the first one arrives, so a second
+		// Ctrl-C kills the process instead of waiting out the graceful shutdown.
+		go func() { <-ctx.Done(); cancel() }()
 		err = view.Serve(ctx, dir, port, func(url string) {
 			if f.json {
 				res.URL = url

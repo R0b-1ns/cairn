@@ -5,12 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/R0b-1ns/cairn/internal/model"
 )
@@ -320,5 +322,64 @@ func TestViewSanitizesSiteText(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(filepath.Join(dir, "decisions.html")); !strings.Contains(string(b), "Bad  text") {
 		t.Errorf("decisions.html lacks the cleaned decision text")
+	}
+}
+
+// Once Ctrl-C has been received, the signal handling is given back at once, so a
+// second Ctrl-C kills the process instead of waiting out the graceful shutdown.
+func TestViewServeRestoresSignalsOnStop(t *testing.T) {
+	e := newAddEnv(t)
+	oldCtx, oldOpen := serveContext, openBrowser
+	t.Cleanup(func() { serveContext, openBrowser = oldCtx, oldOpen })
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	stopped := make(chan struct{})
+	var once sync.Once
+	serveContext = func() (context.Context, context.CancelFunc) {
+		return ctx, func() { once.Do(func() { close(stopped) }); cancel() }
+	}
+	var conn net.Conn
+	t.Cleanup(func() {
+		if conn != nil {
+			conn.Close()
+		}
+	})
+	openBrowser = func(url string) error {
+		// A request still being read keeps the graceful shutdown waiting.
+		c, err := net.Dial("tcp", strings.TrimSuffix(strings.TrimPrefix(url, "http://"), "/"))
+		if err != nil {
+			t.Error(err)
+		} else {
+			conn = c
+			c.Write([]byte("GET / HTTP/1.1\r\n"))
+			// Connections are accepted in order: once a later request is answered,
+			// the held one has been accepted too.
+			if resp, err := http.Get(url); err != nil {
+				t.Error(err)
+			} else {
+				resp.Body.Close()
+			}
+		}
+		cancel() // the first Ctrl-C
+		return nil
+	}
+	done := make(chan result, 1)
+	go func() { done <- e.run("view", "--serve") }()
+	select {
+	case <-stopped:
+	case r := <-done:
+		t.Fatalf("signal handling given back only after the server stopped: %+v", r)
+	case <-time.After(3 * time.Second):
+		t.Fatal("signal handling not given back while shutting down")
+	}
+	select {
+	case r := <-done:
+		t.Fatalf("server returned before the stop function was checked: %+v", r)
+	default:
+	}
+	conn.Close()
+	conn = nil
+	if r := <-done; r.code != ExitOK {
+		t.Fatalf("view --serve: %+v", r)
 	}
 }
