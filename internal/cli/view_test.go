@@ -385,3 +385,53 @@ func TestViewServeRestoresSignalsOnStop(t *testing.T) {
 		t.Fatalf("view --serve: %+v", r)
 	}
 }
+
+// Each stored value is cleaned on its own: an unterminated OSC in a title must not
+// swallow the rest of the note (later entries, the closer marker, the addendum)
+// in the view's Markdown download or in export.
+func TestMarkdownSanitizesFieldByField(t *testing.T) {
+	e := newAddEnv(t)
+	s := openStore(t, e)
+	n, err := s.InsertNote(model.Note{
+		Agent: "builder", Repo: "server", Task: "TP-03", Model: "claude-test",
+		At: "2026-10-30T10:00:00Z", Title: "Cut \x1b]0;here", Status: model.StatusInProgress,
+		Entries: []model.Entry{
+			{Type: model.TypeChange, Text: "Kept change \x1b[31mred\u202e"},
+			{Type: model.TypeOpen, Text: "Kept open point \x1b]8;;x"},
+		},
+		// "none" and commits are printed as stored: a bare OSC there used to run to the end.
+		None:    []model.EntryType{model.TypeDecision, model.TypeNote, model.TypeHelper, "x\x1b]0;"},
+		Commits: []string{"abc1234\x1b]2;", "def5678"},
+	})
+	if err != nil {
+		t.Fatalf("insert raw note: %v", err)
+	}
+	add := mustAddendum(t, e, model.Addendum{NoteID: n.ID, Agent: "reviewer", Model: "m", At: "2026-10-31T09:00:00Z",
+		Status: model.StatusDone, Resolves: []string{n.Entries[1].ID},
+		Entries: []model.Entry{{Type: model.TypeNote, Text: "Kept addendum note"}}})
+	s.Close()
+	noBrowser(t)
+	e.mustRun("view")
+	md, err := os.ReadFile(filepath.Join(e.root, ".cairn", "view", "notes", n.ID+".md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	export := e.mustRun("export", "--format", "md").out
+	for name, body := range map[string]string{"view .md": string(md), "export": export} {
+		for _, want := range []string{"## " + n.ID + "  Cut ", "Kept change red", "Kept open point",
+			"(resolved by " + add.ID + ")", "#### addendum " + add.ID, "Kept addendum note", "status: done",
+			"none: decision, note, helper, x\n", "commits: abc1234, def5678"} {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s lacks %q:\n%s", name, want, body)
+			}
+		}
+		for _, bad := range []string{"\x1b", "\u202e", "[31m", "0;here", "8;;x"} {
+			if strings.Contains(body, bad) {
+				t.Errorf("%s contains %q", name, bad)
+			}
+		}
+	}
+	if !strings.HasSuffix(export, string(md)) {
+		t.Errorf("view .md is not the note part of export:\n--- md\n%s\n--- export\n%s", md, export)
+	}
+}
