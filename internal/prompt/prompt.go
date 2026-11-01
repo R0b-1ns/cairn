@@ -24,27 +24,36 @@ type Prompter struct {
 	// Cancel, when set, ends the question being asked with ErrCanceled as soon
 	// as it delivers a value or is closed (Ctrl-C), even while In blocks.
 	Cancel <-chan os.Signal
+
+	pending chan result // read still blocked on In after a cancel
 }
 
 // Choice is one option of Choose: Value is what the answer returns and Help
 // says what it is for.
 type Choice struct{ Value, Help string }
 
+type result struct {
+	line string
+	err  error
+}
+
 func (p *Prompter) readLine() (string, error) {
 	if p.Cancel == nil {
 		return p.read()
 	}
-	type result struct {
-		line string
-		err  error
+	// A read left blocked by an earlier cancel is awaited again rather than
+	// replaced, so at most one goroutine ever reads In.
+	if p.pending == nil {
+		done := make(chan result, 1)
+		p.pending = done
+		go func() {
+			line, err := p.read()
+			done <- result{line, err}
+		}()
 	}
-	done := make(chan result, 1)
-	go func() { // left blocked on In after a cancel; the command ends right after
-		line, err := p.read()
-		done <- result{line, err}
-	}()
 	select {
-	case r := <-done:
+	case r := <-p.pending:
+		p.pending = nil
 		return r.line, r.err
 	case <-p.Cancel:
 		return "", ErrCanceled

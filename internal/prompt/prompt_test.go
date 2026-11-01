@@ -105,6 +105,23 @@ func TestAskCanceledBySignal(t *testing.T) {
 	}
 }
 
+func TestCanceledReadIsReusedWithoutRace(t *testing.T) {
+	r, w := io.Pipe()
+	defer w.Close()
+	sig := make(chan os.Signal, 1)
+	var out strings.Builder
+	p := &Prompter{In: bufio.NewReader(r), Out: &out, Cancel: sig}
+	sig <- os.Interrupt
+	if _, err := p.Ask("Name", "", nil); !errors.Is(err, ErrCanceled) {
+		t.Fatalf("got %v, want ErrCanceled", err)
+	}
+	go w.Write([]byte("ada\n"))
+	got, err := p.Ask("Name", "", nil) // the pending read delivers the line
+	if err != nil || got != "ada" {
+		t.Fatalf("got %q, %v", got, err)
+	}
+}
+
 func TestAskWithCancelStillReads(t *testing.T) {
 	p, _ := newP("ada\n")
 	p.Cancel = make(chan os.Signal)
