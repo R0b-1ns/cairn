@@ -62,7 +62,7 @@ Format: `<kind>-<6 characters>`.
 ## Author, branch and ref
 
 - Notes and addenda carry `author_name`, `author_email`, `branch` and `ref`, all optional and empty by default.
-- cairn sets the author (from `--author`, `CAIRN_AUTHOR`, then git) and the branch (from `--branch`, then the current git branch) at write time. `ref` is a ticket URL and is only ever given by the writer.
+- cairn sets the author (from `--author`, `CAIRN_AUTHOR`, then git) and the branch (from `--branch`, then the current git branch) at write time. Each git call is stopped after 5 seconds; a git that does not answer in time gives empty values, and the write goes on. `ref` is a ticket URL and is only ever given by the writer.
 - They are immutable like everything else. To correct or add one, write an addendum (`amend --ref` links a ticket later).
 - A task's refs are those of every note and addendum with the same task base. A ref given for `T-7.1` therefore also belongs to `T-7`.
 - Limits and formats: see `limits.md`.

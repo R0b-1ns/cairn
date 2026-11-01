@@ -67,7 +67,7 @@ After the last answer, `init` prints the equivalent command on standard error, s
 equivalent command: cairn init --name demo --repos server --tasks auto --task-prefix FEAT
 ```
 
-Ctrl-D (end of input) or a read error at any question cancels `init`: it prints `cairn: init canceled`, exits with code 1 and has written nothing (no `.cairn` folder, no registry entry, no database). All questions are asked before anything is written.
+Ctrl-D (end of input), Ctrl-C or a read error at any question cancels `init`: it prints `cairn: init canceled`, exits with code 1 and has written nothing (no `.cairn` folder, no registry entry, no database). All questions are asked before anything is written.
 
 Without a terminal (a script, CI, an agent, piped standard input), or with `--no-input`, `init` never prompts and never reads standard input; it behaves exactly as described under Task numbering.
 
@@ -85,7 +85,7 @@ Machine mode prints `(machine mode)` and the database path under the data direct
 ## Exit codes
 
 - `0`: project created and registered.
-- `1`: runtime error: the questions were canceled (Ctrl-D), the name is already registered, the folder is already registered, the folder already holds a `.cairn` store, `--path` is not a folder, or a file cannot be written.
+- `1`: runtime error: the questions were canceled (Ctrl-D or Ctrl-C), the name is already registered, the folder is already registered, the folder already holds a `.cairn` store, `--path` is not a folder, or a file cannot be written.
 - `2`: usage error: a positional argument was given, or `--task-pattern` was combined with `--tasks auto`, `jira`, `linear` or `github`.
 - `3`: invalid input: name, mode, repos, context, task mode, prefix, URL template or task pattern fails validation, including `--tasks custom` without `--task-pattern` and `--task-prefix` with a mode other than `auto`. Every bad field is listed on standard error, task flags included.
 

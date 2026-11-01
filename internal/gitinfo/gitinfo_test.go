@@ -3,7 +3,9 @@ package gitinfo
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
+	"time"
 )
 
 func isolate(t *testing.T) {
@@ -111,5 +113,32 @@ func TestBranchUnborn(t *testing.T) {
 	git(t, dir, "init", "-b", "main")
 	if got := Branch(dir); got != "main" {
 		t.Errorf("unborn repo: got %q, want main", got)
+	}
+}
+
+// TestHungGitGivesEmptyValues puts a git that never answers first on PATH:
+// every function must give up after the timeout and return empty values.
+func TestHungGitGivesEmptyValues(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("no sh")
+	}
+	bin := t.TempDir()
+	// Not exec: the sleeping child keeps standard output open after sh is killed.
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	old := timeout
+	timeout = 200 * time.Millisecond
+	t.Cleanup(func() { timeout = old })
+	start := time.Now()
+	if b := Branch(t.TempDir()); b != "" {
+		t.Errorf("branch = %q", b)
+	}
+	if n, e := Identity(t.TempDir()); n != "" || e != "" {
+		t.Errorf("identity = %q %q", n, e)
+	}
+	if d := time.Since(start); d > 10*time.Second {
+		t.Fatalf("took %v: git was not stopped", d)
 	}
 }

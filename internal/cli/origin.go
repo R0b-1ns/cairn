@@ -10,24 +10,20 @@ import (
 	"github.com/R0b-1ns/cairn/internal/validate"
 )
 
-// resolveOrigin works out who wrote a note and on which branch. Explicit
-// values (the flags, then CAIRN_AUTHOR for the author) win and are returned
-// as errors when invalid. Otherwise git is asked about the current directory;
-// a git value that fails validation is dropped with a warning.
-func resolveOrigin(c *Ctx, authorFlag, branchFlag string) (name, email, branch string, errs []validate.FieldError) {
-	return resolve(c, authorFlag, branchFlag, true, true)
-}
-
-// resolve is resolveOrigin limited to the parts the caller still needs.
+// resolve works out who wrote a note and on which branch, limited to the
+// parts the caller still needs. Explicit values (the flags, then CAIRN_AUTHOR
+// for the author) win and are returned as errors when invalid. Otherwise git
+// is asked about the current directory; a git value that fails validation is
+// dropped with a warning.
 func resolve(c *Ctx, authorFlag, branchFlag string, wantAuthor, wantBranch bool) (name, email, branch string, errs []validate.FieldError) {
-	author := authorFlag
+	author, from := authorFlag, ""
 	if author == "" && wantAuthor {
-		author = c.Getenv("CAIRN_AUTHOR")
+		author, from = c.Getenv("CAIRN_AUTHOR"), " (from CAIRN_AUTHOR)"
 	}
 	if author != "" {
 		name, email = gitinfo.ParseAuthor(author)
-		errs = append(errs, checkLine("author_name", name, validate.MaxAuthorName)...)
-		errs = append(errs, checkLine("author_email", email, validate.MaxAuthorEmail)...)
+		errs = append(errs, checkLine("author_name"+from, name, validate.MaxAuthorName)...)
+		errs = append(errs, checkLine("author_email"+from, email, validate.MaxAuthorEmail)...)
 	}
 	if branchFlag != "" {
 		branch = branchFlag
@@ -68,7 +64,7 @@ func gitValue(c *Ctx, field, v string, max int) string {
 }
 
 // fillOrigin sets the author and branch of a note or addendum that does not
-// carry them yet, using resolveOrigin. It returns the errors to report.
+// carry them yet, using resolve. It returns the errors to report.
 func fillOrigin(c *Ctx, name, email, branch *string, authorFlag, branchFlag string) []validate.FieldError {
 	wantAuthor := *name == "" && *email == ""
 	wantBranch := *branch == ""

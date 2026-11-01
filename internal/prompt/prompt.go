@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -20,6 +21,9 @@ var ErrCanceled = errors.New("canceled")
 type Prompter struct {
 	In  *bufio.Reader
 	Out io.Writer
+	// Cancel, when set, ends the question being asked with ErrCanceled as soon
+	// as it delivers a value or is closed (Ctrl-C), even while In blocks.
+	Cancel <-chan os.Signal
 }
 
 // Choice is one option of Choose: Value is what the answer returns and Help
@@ -27,6 +31,27 @@ type Prompter struct {
 type Choice struct{ Value, Help string }
 
 func (p *Prompter) readLine() (string, error) {
+	if p.Cancel == nil {
+		return p.read()
+	}
+	type result struct {
+		line string
+		err  error
+	}
+	done := make(chan result, 1)
+	go func() { // left blocked on In after a cancel; the command ends right after
+		line, err := p.read()
+		done <- result{line, err}
+	}()
+	select {
+	case r := <-done:
+		return r.line, r.err
+	case <-p.Cancel:
+		return "", ErrCanceled
+	}
+}
+
+func (p *Prompter) read() (string, error) {
 	line, err := p.In.ReadString('\n')
 	if err != nil && (err != io.EOF || line == "") {
 		return "", ErrCanceled

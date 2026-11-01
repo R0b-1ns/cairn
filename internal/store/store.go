@@ -120,6 +120,9 @@ func (s *Store) verify() error {
 	if err := s.db.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
 		return fmt.Errorf("not a cairn database: %w", err)
 	}
+	if v > SchemaVersion {
+		return fmt.Errorf("unsupported database version %d (this build supports %d); run 'cairn update' to upgrade", v, SchemaVersion)
+	}
 	if v != SchemaVersion {
 		return fmt.Errorf("unsupported database version %d (this build supports %d)", v, SchemaVersion)
 	}

@@ -261,3 +261,18 @@ func TestMigrateKeepsEntriesAddendaAndSearch(t *testing.T) {
 		}
 	}
 }
+
+func TestNewerVersionSaysUpdate(t *testing.T) {
+	s, path := newStore(t)
+	s.Close()
+	db := rawDB(t, path)
+	if _, err := db.Exec("PRAGMA user_version = 5"); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	_, err := Open(path)
+	want := "unsupported database version 5 (this build supports 4); run 'cairn update' to upgrade"
+	if err == nil || err.Error() != want {
+		t.Fatalf("got %v, want %q", err, want)
+	}
+}

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -221,5 +222,32 @@ func TestInteractiveEquivalentKeepsGivenFlags(t *testing.T) {
 	want := `equivalent command: cairn init --name demo --repos a --tasks jira --task-url 'https://x/{task}'`
 	if !strings.Contains(r.err, want) {
 		t.Errorf("want %q in:\n%s", want, r.err)
+	}
+}
+
+func TestInterruptCancelsInitAndWritesNothing(t *testing.T) {
+	sig := make(chan os.Signal, 1)
+	stopped := false
+	old := interruptSignals
+	interruptSignals = func() (<-chan os.Signal, func()) { return sig, func() { stopped = true } }
+	t.Cleanup(func() { interruptSignals = old })
+	e := newEnv(t)
+	e.t.Chdir(e.root)
+	in, w := io.Pipe() // nobody types: the first question waits until Ctrl-C
+	defer w.Close()
+	sig <- os.Interrupt
+	var out, errb bytes.Buffer
+	c := &Ctx{Stdin: in, Stdout: &out, Stderr: &errb, Getenv: e.getenv, Interactive: true}
+	if code := runCtx(c, []string{"init"}); code != 1 || !strings.Contains(errb.String(), "cairn: init canceled") {
+		t.Fatalf("exit %d\n%s", code, errb.String())
+	}
+	if !stopped {
+		t.Error("signal handling not stopped after the questions")
+	}
+	if _, err := os.Stat(filepath.Join(e.root, ".cairn")); !os.IsNotExist(err) {
+		t.Errorf(".cairn exists: %v", err)
+	}
+	if _, err := os.Stat(e.home); !os.IsNotExist(err) {
+		t.Errorf("data home was created: %v", err)
 	}
 }

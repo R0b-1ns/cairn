@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -27,12 +28,24 @@ type initValues struct {
 
 var errInitCanceled = errors.New("init canceled")
 
+// interruptSignals starts catching Ctrl-C and returns the channel and the
+// function that stops it. Tests replace it so no real signal is sent.
+var interruptSignals = func() (<-chan os.Signal, func()) {
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt)
+	return ch, func() { signal.Stop(ch) }
+}
+
 // askInit asks, on standard error, the questions whose flag is not in given,
 // stores the answers in v and marks the flags it answered in given, so that
 // init then treats them like flags. Nothing is written to disk. It ends by
 // printing the equivalent command line.
 func askInit(c *Ctx, given map[string]bool, v *initValues) error {
-	pr := &prompt.Prompter{In: bufio.NewReader(c.Stdin), Out: c.Stderr}
+	// Ctrl-C during the questions cancels like the end of input: nothing is
+	// written. Signals are caught only while the questions run.
+	sig, stop := interruptSignals()
+	defer stop()
+	pr := &prompt.Prompter{In: bufio.NewReader(c.Stdin), Out: c.Stderr, Cancel: sig}
 	orig := map[string]bool{}
 	for k, b := range given {
 		orig[k] = b

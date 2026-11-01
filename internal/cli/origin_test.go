@@ -226,3 +226,39 @@ func TestAddNewTaskExhausted(t *testing.T) {
 		t.Fatalf("list after refusals:\n%s", out)
 	}
 }
+
+func TestInvalidCairnAuthorNamesTheEnvironment(t *testing.T) {
+	e := newEnv(t)
+	e.initProject()
+	isolateGit(t)
+	e.env["CAIRN_AUTHOR"] = "Ada\x01 <ada@x.org>"
+	r := e.run("add", "--agent", "b", "--repo", "server", "--model", "m", "--title", "t", "--status", "done",
+		"--change", "x", "--none", "decision,open,note,helper")
+	if r.code != 3 || !strings.Contains(r.err, "author_name (from CAIRN_AUTHOR): contains a control character") {
+		t.Fatalf("add: code %d, stderr %q", r.code, r.err)
+	}
+	// an explicit --author wins and is reported under its own name
+	r = e.run("add", "--agent", "b", "--repo", "server", "--model", "m", "--title", "t", "--status", "done",
+		"--change", "x", "--none", "decision,open,note,helper", "--author", "Bob\x01")
+	if r.code != 3 || !strings.Contains(r.err, "  author_name: contains a control character") {
+		t.Fatalf("flag: code %d, stderr %q", r.code, r.err)
+	}
+	delete(e.env, "CAIRN_AUTHOR")
+	id := addNote(t, e)
+	e.env["CAIRN_AUTHOR"] = "Ada\x01"
+	r = e.run("amend", id, "--agent", "human", "--model", "none", "--status", "done")
+	if r.code != 3 || !strings.Contains(r.err, "author_name (from CAIRN_AUTHOR): ") {
+		t.Fatalf("amend: code %d, stderr %q", r.code, r.err)
+	}
+}
+
+func TestAmendInvalidBranchIsValidationError(t *testing.T) {
+	e := newEnv(t)
+	e.initProject()
+	isolateGit(t)
+	id := addNote(t, e)
+	r := e.run("amend", id, "--agent", "human", "--model", "none", "--status", "done", "--branch", "a\tb")
+	if r.code != 3 || !strings.Contains(r.err, "branch: ") {
+		t.Fatalf("code %d, stderr %q", r.code, r.err)
+	}
+}

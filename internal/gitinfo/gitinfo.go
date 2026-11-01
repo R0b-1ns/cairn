@@ -3,17 +3,27 @@
 package gitinfo
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
+
+// timeout bounds every git call, so a hung git (a stale lock, a slow network
+// file system) cannot hang cairn; a call that times out gives empty values.
+var timeout = 5 * time.Second
 
 // run executes git with an argument list in dir and returns trimmed standard
 // output. Standard error is discarded and git never prompts.
 func run(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	// After the kill, stop waiting for output still held open by git's children.
+	cmd.WaitDelay = time.Second
 	out, err := cmd.Output()
 	if err != nil {
 		return "", err

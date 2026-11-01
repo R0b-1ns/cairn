@@ -126,7 +126,7 @@ Modes are set at creation. The process umask can only make them narrower.
 
 Before any command runs, the database must pass every check. Failure refuses the database (exit 1) and changes nothing: for a version 3 database the checks run against the version 3 schema before the backup and the upgrade, and again against the version 4 schema after.
 
-1. `PRAGMA user_version` equals `4`, after any migration described above. Otherwise: `unsupported database version <n>`.
+1. `PRAGMA user_version` equals `4`, after any migration described above. Otherwise: `unsupported database version <n>`; for a version newer than the build, the message ends with `; run 'cairn update' to upgrade`.
 2. `PRAGMA quick_check(1)` returns `ok`.
 3. All ten immutability triggers exist with the exact SQL cairn creates. Otherwise: `immutability trigger <name> is missing` or `was altered`.
 4. Every object in `sqlite_master` (tables, indexes, triggers, and the full-text search index) matches the expected definition exactly. An extra, missing, or altered object refuses the database.

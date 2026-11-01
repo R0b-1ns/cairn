@@ -3,6 +3,8 @@ package prompt
 import (
 	"bufio"
 	"errors"
+	"io"
+	"os"
 	"strings"
 	"testing"
 )
@@ -84,5 +86,29 @@ func TestChooseByNumberAndValue(t *testing.T) {
 	}
 	if _, err := p.Choose("Pick", cs, "a"); !errors.Is(err, ErrCanceled) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestAskCanceledBySignal(t *testing.T) {
+	r, w := io.Pipe() // a terminal nobody types into: the read blocks
+	defer w.Close()
+	sig := make(chan os.Signal, 1)
+	var out strings.Builder
+	p := &Prompter{In: bufio.NewReader(r), Out: &out, Cancel: sig}
+	sig <- os.Interrupt
+	if _, err := p.Ask("Name", "demo", nil); !errors.Is(err, ErrCanceled) {
+		t.Fatalf("got %v, want ErrCanceled", err)
+	}
+	close(sig)
+	if _, err := p.Choose("Pick", []Choice{{Value: "a"}}, "a"); !errors.Is(err, ErrCanceled) {
+		t.Fatalf("closed channel: got %v", err)
+	}
+}
+
+func TestAskWithCancelStillReads(t *testing.T) {
+	p, _ := newP("ada\n")
+	p.Cancel = make(chan os.Signal)
+	if got, err := p.Ask("Name", "", nil); err != nil || got != "ada" {
+		t.Fatalf("got %q, %v", got, err)
 	}
 }
