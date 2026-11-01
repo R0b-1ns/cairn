@@ -11,6 +11,7 @@ import (
 	"github.com/R0b-1ns/cairn/internal/model"
 	"github.com/R0b-1ns/cairn/internal/registry"
 	"github.com/R0b-1ns/cairn/internal/store"
+	"github.com/R0b-1ns/cairn/internal/validate"
 )
 
 func init() {
@@ -39,6 +40,11 @@ func parentSession(c *Ctx, projectFlag string) (*session, store.LinkState, int) 
 	return s, pl, ExitOK
 }
 
+func notActiveChild(c *Ctx, parent, name string) int {
+	return fail(c, ExitRuntime, "project %s has no active child named %s; to attach a folder again, run in it: cairn init --project %s --repo <repo> (add --local for a local child)",
+		sanitize(parent), sanitize(name), sanitize(parent))
+}
+
 func activeChild(pl store.LinkState, name string) (model.Child, bool) {
 	for _, ch := range pl.Children {
 		if ch.Name == name {
@@ -56,6 +62,9 @@ func defineProjectLink(fs *flag.FlagSet) Handler {
 			return fail(c, ExitUsage, "usage: cairn project link [--project NAME] <child> <path>")
 		}
 		childName := args[0]
+		if !validate.ValidRepo(childName) {
+			return fail(c, ExitUsage, "%s is not a valid child name", sanitize(childName))
+		}
 		root, err := registry.NormalizePath(args[1])
 		if err != nil {
 			return fail(c, ExitRuntime, "%s", sanitize(err.Error()))
@@ -71,7 +80,7 @@ func defineProjectLink(fs *flag.FlagSet) Handler {
 		parent := s.Loc.Name
 		ch, ok := activeChild(pl, childName)
 		if !ok {
-			return fail(c, ExitRuntime, "project %s has no active child named %s", sanitize(parent), sanitize(childName))
+			return notActiveChild(c, parent, childName)
 		}
 		if err := verifyChildFolder(root, parent, pl.ID, ch); err != nil {
 			return fail(c, ExitRuntime, "%s is not the child %s of project %s: %s", sanitize(root), sanitize(childName), sanitize(parent), sanitize(err.Error()))
@@ -96,9 +105,9 @@ func verifyChildFolder(root, parent, parentID string, ch model.Child) error {
 		if !found {
 			return errors.New("it holds no .cairn/cairn.db")
 		}
-		cs, err := store.Open(db)
+		cs, err := store.OpenCurrent(db)
 		if err != nil {
-			return err
+			return err // an older schema cannot carry a parent link
 		}
 		defer cs.Close()
 		cp, err := cs.Project()
@@ -151,6 +160,9 @@ func warnf(c *Ctx, format string, a ...any) {
 // unlinkFromParent detaches the child on the parent's side and, when the
 // child's folder is known on this machine, on the child's side.
 func unlinkFromParent(c *Ctx, projectFlag, childName string) int {
+	if !validate.ValidRepo(childName) {
+		return fail(c, ExitUsage, "%s is not a valid child name", sanitize(childName))
+	}
 	s, pl, code := parentSession(c, projectFlag)
 	if s == nil {
 		return code
@@ -159,7 +171,7 @@ func unlinkFromParent(c *Ctx, projectFlag, childName string) int {
 	parent := s.Loc.Name
 	ch, ok := activeChild(pl, childName)
 	if !ok {
-		return fail(c, ExitRuntime, "project %s has no active child named %s", sanitize(parent), sanitize(childName))
+		return notActiveChild(c, parent, childName)
 	}
 	entry, err := s.Reg.Get(parent)
 	if err != nil {
@@ -179,13 +191,13 @@ func unlinkFromParent(c *Ctx, projectFlag, childName string) int {
 	}
 	fmt.Fprintf(c.Stdout, "unlinked child %s from project %s (repo %s stays in the project; no database or note was deleted)\n",
 		sanitize(childName), sanitize(parent), sanitize(ch.Repo))
-	commitHint(c, s)
+	commitHint(c, s.Loc.Mode, s.Loc.DBPath)
 	return ExitOK
 }
 
-func commitHint(c *Ctx, s *session) {
-	if s.Loc.Mode == model.ModeProject {
-		fmt.Fprintf(c.Stdout, "the parent database %s changed (link events); commit it so your team gets the change\n", sanitize(s.Loc.DBPath))
+func commitHint(c *Ctx, mode, db string) {
+	if mode == model.ModeProject {
+		fmt.Fprintf(c.Stdout, "the parent database %s changed (link events); commit it so your team gets the change\n", sanitize(db))
 	}
 }
 
@@ -198,7 +210,11 @@ func clearChildSide(c *Ctx, ch model.Child, path, parent, parentID string) {
 			warnf(c, "cannot reach the database of child %s at %s; run in that folder: cairn project unlink", sanitize(ch.Name), sanitize(path))
 			return
 		}
-		cs, err := store.Open(db)
+		cs, err := store.OpenCurrent(db)
+		var nm *store.NeedsMigrationError
+		if errors.As(err, &nm) {
+			return // an older schema has no parent link to clear
+		}
 		if err != nil {
 			warnf(c, "cannot open the database of child %s (%s); run in that folder: cairn project unlink", sanitize(ch.Name), sanitize(err.Error()))
 			return
@@ -222,8 +238,8 @@ func clearChildSide(c *Ctx, ch model.Child, path, parent, parentID string) {
 		warnf(c, "cannot read the pointer of child %s (%s); run in that folder: cairn project unlink", sanitize(ch.Name), sanitize(err.Error()))
 		return
 	}
-	if !found || p.Parent != parent || p.Repo != ch.Repo {
-		return
+	if !found || p.Parent != parent || p.Repo != ch.Repo || p.ParentID != parentID {
+		return // not (or no longer) this parent's child
 	}
 	if err := locate.RemovePointer(path); err != nil {
 		warnf(c, "could not remove the pointer of child %s (%s)", sanitize(ch.Name), sanitize(err.Error()))
@@ -300,37 +316,53 @@ func unlinkFromChild(c *Ctx) int {
 		kind, childName, parentName, parentID = model.ChildLocal, cp.Name, cl.Parent.Name, cl.Parent.ID
 	}
 
-	// Detach from the parent when it is reachable and is the very project the
-	// child recorded; otherwise only the child's own link is cleared.
+	// Fail closed: detach on the parent only when the child's recorded parent
+	// id equals the resolved parent's id and the parent recorded this very
+	// folder for the child. Otherwise only the child's own link is cleared.
 	detached, reason := false, ""
-	var parentSt *store.Store
-	if ent, err := reg.Get(parentName); err != nil {
+	var detachedMode, detachedDB string
+	ent, err := reg.Get(parentName)
+	switch {
+	case err != nil:
 		reason = fmt.Sprintf("project %s is not registered on this machine", sanitize(parentName))
-	} else if ent.ID != "" && parentID != "" && ent.ID != parentID {
+	case parentID == "":
+		reason = "the folder records no parent id, so it cannot be matched to the registered project"
+	case ent.ID != "" && ent.ID != parentID:
 		reason = fmt.Sprintf("the registered project %s is not the one this folder was linked to", sanitize(parentName))
-	} else if loc, err := locate.Find("", parentName, reg); err != nil {
-		reason = sanitize(err.Error())
-	} else if parentSt, err = store.Open(loc.DBPath); err != nil {
-		reason = sanitize(err.Error())
-	} else {
-		defer parentSt.Close()
-		if pl, err := parentSt.Links(); err != nil {
+	case ent.Children[childName] == "":
+		reason = fmt.Sprintf("project %s has no recorded folder for %s on this machine", sanitize(parentName), sanitize(childName))
+	case !sameFolder(ent.Children[childName], root):
+		reason = fmt.Sprintf("project %s records another folder for %s", sanitize(parentName), sanitize(childName))
+	default:
+		loc, err := locate.Find("", parentName, reg)
+		if err != nil {
 			reason = sanitize(err.Error())
-		} else if pl.ID != "" && parentID != "" && pl.ID != parentID {
+			break
+		}
+		parentSt, err := store.OpenCurrent(loc.DBPath)
+		if err != nil {
+			reason = sanitize(err.Error())
+			break
+		}
+		defer parentSt.Close()
+		pl, err := parentSt.Links()
+		if err != nil {
+			reason = sanitize(err.Error())
+			break
+		}
+		if pl.ID != parentID {
 			reason = fmt.Sprintf("the database of project %s is not the one this folder was linked to", sanitize(parentName))
-		} else {
-			detached = true
-			if _, ok := activeChild(pl, childName); ok {
-				if err := parentSt.DetachChild(childName); err != nil {
-					return fail(c, ExitRuntime, "%s", sanitize(err.Error()))
-				}
-			}
-			if p := childPath(reg, parentName, childName); p == "" || sameFolder(p, root) {
-				if err := reg.RemoveChild(parentName, childName); err != nil {
-					return fail(c, ExitRuntime, "%s", sanitize(err.Error()))
-				}
+			break
+		}
+		if _, ok := activeChild(pl, childName); ok {
+			if err := parentSt.DetachChild(childName); err != nil {
+				return fail(c, ExitRuntime, "%s", sanitize(err.Error()))
 			}
 		}
+		if err := reg.RemoveChild(parentName, childName); err != nil {
+			return fail(c, ExitRuntime, "%s", sanitize(err.Error()))
+		}
+		detached, detachedMode, detachedDB = true, loc.Mode, loc.DBPath
 	}
 
 	if kind == model.ChildLocal {
@@ -342,15 +374,11 @@ func unlinkFromChild(c *Ctx) int {
 	}
 	if detached {
 		fmt.Fprintf(c.Stdout, "unlinked %s from project %s (no database or note was deleted)\n", sanitize(childName), sanitize(parentName))
+		commitHint(c, detachedMode, detachedDB)
 	} else {
 		fmt.Fprintf(c.Stdout, "cleared the link of %s to project %s (no database or note was deleted)\n", sanitize(childName), sanitize(parentName))
 		warnf(c, "%s; the parent still lists %s as a child; run on the parent: cairn project unlink --project %s %s",
 			reason, sanitize(childName), sanitize(parentName), sanitize(childName))
 	}
 	return ExitOK
-}
-
-func childPath(reg *registry.Registry, parent, child string) string {
-	e, _ := reg.Get(parent)
-	return e.Children[child]
 }

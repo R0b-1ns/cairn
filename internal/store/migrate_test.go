@@ -2,6 +2,8 @@ package store
 
 import (
 	"bytes"
+	"errors"
+	"github.com/R0b-1ns/cairn/internal/model"
 	"os"
 	"path/filepath"
 	"strings"
@@ -262,4 +264,44 @@ func TestNewerVersionSaysUpdate(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Fatalf("got %v, want %q", err, want)
 	}
+}
+
+func TestOpenCurrentNeverWrites(t *testing.T) {
+	path := makeV3(t)
+	db := rawDB(t, path)
+	if _, err := db.Exec(migrations[0].sql); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("PRAGMA user_version = 4"); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	before, _ := os.ReadFile(path)
+	fiBefore, _ := os.Stat(path)
+	_, err := OpenCurrent(path)
+	var nm *NeedsMigrationError
+	if !errors.As(err, &nm) || nm.Version != 4 || nm.Path != path || !strings.Contains(err.Error(), path) {
+		t.Fatalf("err = %v", err)
+	}
+	after, _ := os.ReadFile(path)
+	fiAfter, _ := os.Stat(path)
+	if !bytes.Equal(before, after) || !fiBefore.ModTime().Equal(fiAfter.ModTime()) {
+		t.Error("the file changed")
+	}
+	matches, _ := filepath.Glob(path + "*")
+	if len(matches) != 1 {
+		t.Errorf("extra files: %v", matches)
+	}
+	// A current database behaves like Open.
+	cur := filepath.Join(t.TempDir(), "cairn.db")
+	c, err := Create(cur, model.Project{Name: "p", Mode: "project", Repos: []string{"a"}, TaskPattern: "^x$"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Close()
+	s, err := OpenCurrent(cur)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
 }

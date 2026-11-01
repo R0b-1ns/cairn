@@ -63,5 +63,7 @@ Detaches the child from inside its own folder, also for an attached child that t
 
 ## Notes
 
-- Link again later with `cairn init --project <parent> --repo <repo>` in the folder of an attached child; the parent's repo list and all notes are unchanged.
-- A local child that was unlinked keeps its database as a standalone project; `cairn init --project` refuses a folder that already holds a database, so it is not re-attached that way.
+- Link again later: for an attached child run `cairn init --project <parent> --repo <repo>` in its folder; for a local child run `cairn init --project <parent> --repo <repo> --local` (add `--name` when the project name differs from the repo). `init` adopts the existing standalone database when its project name and repo match and it has no parent; no note is changed.
+- Without `<child>`, the parent is detached only when the id recorded in the child (pointer `parent_id` or the database's parent event) is present and equals the registered parent's id, and the parent has recorded this very folder for the child (`cairn project link`). Otherwise only the child's own link is cleared and a warning names the command to run on the parent.
+- A child whose pointer was left behind refuses commands (exit code 4) until you run `cairn project unlink` inside it or `cairn project link ...`.
+- Unlinking never migrates a database it only reads: a child on an older schema is left alone until a cairn command runs inside that repo.

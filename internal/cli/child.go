@@ -58,6 +58,22 @@ func initChild(c *Ctx, parentName, repo, name string, local bool, path, context 
 	if fi, err := os.Stat(root); err != nil || !fi.IsDir() {
 		return fail(c, ExitRuntime, "%s is not a folder", sanitize(root))
 	}
+	// A local child can adopt a standalone database left by `project unlink`.
+	var cs *store.Store
+	adopt := false
+	childDB := filepath.Join(root, ".cairn", "cairn.db")
+	if local {
+		if db, found, err := locate.CheckStore(root); err != nil {
+			return fail(c, ExitRuntime, "%s", sanitize(err.Error()))
+		} else if found {
+			var code int
+			if cs, code = adoptableDatabase(c, db, name, repo); cs == nil {
+				return code
+			}
+			defer func() { cs.Close() }()
+			adopt = true
+		}
+	}
 	reg, err := openRegistry(c)
 	if err != nil {
 		return fail(c, ExitRuntime, "%s", sanitize(err.Error()))
@@ -67,9 +83,14 @@ func initChild(c *Ctx, parentName, repo, name string, local bool, path, context 
 		return fail(c, ExitRuntime, "%s", sanitize(err.Error()))
 	}
 	var pe *registry.Entry
+	registered := false
 	for i, e := range entries {
 		if e.Name == parentName {
 			pe = &entries[i]
+		}
+		if adopt && e.Name == name && sameFolder(e.Path, root) {
+			registered = true
+			continue
 		}
 		if sameFolder(e.Path, root) {
 			if len(e.Children) != 0 {
@@ -109,10 +130,10 @@ func initChild(c *Ctx, parentName, repo, name string, local bool, path, context 
 			return fail(c, ExitRuntime, "project %s already has an active child named %s", sanitize(parentName), sanitize(name))
 		}
 	}
-	// The folder must hold neither a database nor a pointer.
+	// The folder must hold neither a database (unless adopted) nor a pointer.
 	if db, found, err := locate.CheckStore(root); err != nil {
 		return fail(c, ExitRuntime, "%s", sanitize(err.Error()))
-	} else if found {
+	} else if found && !adopt {
 		return fail(c, ExitRuntime, "already initialized: %s exists", sanitize(db))
 	}
 	if _, found, err := locate.ReadPointer(root); err != nil {
@@ -136,21 +157,27 @@ func initChild(c *Ctx, parentName, repo, name string, local bool, path, context 
 	dotCairn := filepath.Join(root, ".cairn")
 	_, statErr := os.Lstat(dotCairn)
 	createdDir := statErr != nil
-	childDB := filepath.Join(dotCairn, "cairn.db")
-	var cs *store.Store
 	linked := false
+	parentSet := false
 	cleanup := func() {
+		if adopt && parentSet {
+			if err := cs.ClearParent(); err != nil {
+				fmt.Fprintf(c.Stderr, "cairn: warning: could not clear the parent of %s (%s); run in that folder: cairn project unlink\n", sanitize(name), sanitize(err.Error()))
+			}
+		}
 		if cs != nil {
 			cs.Close()
 		}
-		if local {
+		if adopt {
+			// the standalone database stays
+		} else if local {
 			for _, suffix := range []string{"", "-wal", "-shm", "-journal"} {
 				os.Remove(childDB + suffix)
 			}
 		} else {
 			locate.RemovePointer(root)
 		}
-		if createdDir {
+		if createdDir && !adopt {
 			os.Remove(dotCairn)
 		}
 		if linked {
@@ -165,7 +192,7 @@ func initChild(c *Ctx, parentName, repo, name string, local bool, path, context 
 		return fail(c, ExitRuntime, "%s", sanitize(err.Error()))
 	}
 
-	if local {
+	if local && !adopt {
 		if cs, err = store.Create(childDB, child); err != nil {
 			cleanup()
 			return fail(c, ExitRuntime, "%s", sanitize(err.Error()))
@@ -203,14 +230,21 @@ func initChild(c *Ctx, parentName, repo, name string, local bool, path, context 
 		if err := cs.SetParent(model.ParentRef{Name: parentName, ID: pid}); err != nil {
 			return rollback(err)
 		}
+		parentSet = true
 		cid, err := cs.EnsureProjectID()
 		if err != nil {
 			return rollback(err)
 		}
-		if err := reg.Register(registry.Entry{Name: name, Mode: model.ModeProject, Path: root, ID: cid}); err != nil {
-			return rollback(err)
+		if registered {
+			if err := reg.SetID(name, cid); err != nil {
+				return rollback(err)
+			}
+		} else {
+			if err := reg.Register(registry.Entry{Name: name, Mode: model.ModeProject, Path: root, ID: cid}); err != nil {
+				return rollback(err)
+			}
+			undoReg = append(undoReg, func() { reg.Remove(name) })
 		}
-		undoReg = append(undoReg, func() { reg.Remove(name) })
 	}
 	if err := reg.SetChild(parentName, name, root); err != nil {
 		return rollback(err)
@@ -227,7 +261,10 @@ func initChild(c *Ctx, parentName, repo, name string, local bool, path, context 
 		cs.Close()
 	}
 
-	if local {
+	if adopt {
+		fmt.Fprintf(c.Stdout, "adopted the existing database of project %s at %s as a local child of %s (repo %s); no note was changed\ndatabase: %s\n",
+			sanitize(name), sanitize(root), sanitize(parentName), sanitize(repo), sanitize(childDB))
+	} else if local {
 		fmt.Fprintf(c.Stdout, "initialized project %s (project mode) at %s as a local child of %s (repo %s)\ndatabase: %s\n",
 			sanitize(name), sanitize(root), sanitize(parentName), sanitize(repo), sanitize(childDB))
 	} else {
@@ -239,4 +276,45 @@ func initChild(c *Ctx, parentName, repo, name string, local bool, path, context 
 	}
 	noticeNewVersion(c)
 	return ExitOK
+}
+
+// adoptableDatabase opens the database in an existing folder as a candidate
+// for a local child: a standalone project with the chosen name and repo. It
+// prints why it refuses and returns the exit code.
+func adoptableDatabase(c *Ctx, db, name, repo string) (*store.Store, int) {
+	cs, err := store.OpenCurrent(db)
+	if err != nil {
+		return nil, fail(c, ExitRuntime, "already initialized: %s exists and cannot be adopted: %s", sanitize(db), sanitize(err.Error()))
+	}
+	refuse := func(format string, a ...any) (*store.Store, int) {
+		cs.Close()
+		return nil, fail(c, ExitRuntime, "already initialized: %s exists and cannot be adopted: "+format, append([]any{sanitize(db)}, a...)...)
+	}
+	cp, err := cs.Project()
+	if err != nil {
+		return refuse("%s", sanitize(err.Error()))
+	}
+	if cp.Name != name {
+		return refuse("it belongs to project %s, not %s (use --name)", sanitize(cp.Name), sanitize(name))
+	}
+	if !containsRepo(cp.Repos, repo) {
+		return refuse("repo %s is not one of its repos", sanitize(repo))
+	}
+	cl, err := cs.Links()
+	if err != nil {
+		return refuse("%s", sanitize(err.Error()))
+	}
+	if cl.Parent != nil {
+		return refuse("it is already a child of project %s; unlink it first", sanitize(cl.Parent.Name))
+	}
+	return cs, ExitOK
+}
+
+func containsRepo(repos []string, r string) bool {
+	for _, x := range repos {
+		if x == r {
+			return true
+		}
+	}
+	return false
 }

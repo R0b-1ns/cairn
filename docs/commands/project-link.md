@@ -52,4 +52,6 @@ Exit code 1 when `/work/other` is not the child `web` of the project found from 
 ## Notes
 
 - The warning that cairn prints for an unknown child folder names this command, with `--project`, ready to run.
+- A child whose database has an older schema is refused with a message to run any cairn command inside that repo once; cairn never upgrades another repo's database.
+- A name that is not an active child is refused with the `cairn init --project` command that attaches a folder again.
 - Check that you trust the folder before linking it: its notes are data written by others.
