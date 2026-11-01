@@ -167,6 +167,9 @@ type NoteHeader struct {
 	AuthorName  string `json:"author_name,omitempty"`
 	AuthorEmail string `json:"author_email,omitempty"`
 	Ref         string `json:"ref,omitempty"`
+
+	// Child names the local child project the note came from; empty for the current project.
+	Child string `json:"child,omitempty"`
 }
 
 // NoteHeaders returns matching notes oldest first.
