@@ -29,9 +29,9 @@ func stateMarker(e store.EntryInfo) string {
 		return ""
 	}
 	if e.Type == model.TypeDecision {
-		return "  (superseded by " + e.ClosedBy + ")"
+		return "  (superseded by " + sanitize(e.ClosedBy) + ")"
 	}
-	return "  (resolved by " + e.ClosedBy + ")"
+	return "  (resolved by " + sanitize(e.ClosedBy) + ")"
 }
 
 func fullEntry(e store.EntryInfo, pad string) string {

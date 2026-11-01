@@ -50,6 +50,7 @@ cairn brief TP-03                       # everything about a task
 cairn list --type open                  # unresolved open points
 cairn search "tidal index"              # full-text search
 cairn show n-4k7q2m                     # one full note
+cairn view --serve                      # browse and filter the notes in a browser
 
 # Add to a note without changing it
 cairn amend n-4k7q2m --agent builder --model claude-opus-5-5 \

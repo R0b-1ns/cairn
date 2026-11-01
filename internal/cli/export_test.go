@@ -54,6 +54,32 @@ func TestExportMarkdownReadable(t *testing.T) {
 	}
 }
 
+func TestRenderMarkdownSplit(t *testing.T) {
+	e, _ := newBriefFixture(t)
+	var doc exportDoc
+	if err := json.Unmarshal([]byte(e.mustRun("export", "--format", "json").out), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Notes) < 2 {
+		t.Fatalf("want at least two notes, got %d", len(doc.Notes))
+	}
+	s := &session{St: openTidepool(t, e), Proj: doc.Project}
+	notes, err := renderMarkdownNotes(s, doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	whole, err := renderMarkdown(s, doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := renderMarkdownHeader(doc.Project) + notes; got != whole {
+		t.Fatalf("header+notes differ from renderMarkdown:\n%s\n---\n%s", got, whole)
+	}
+	if !strings.HasPrefix(whole, "# tidepool") || strings.HasPrefix(notes, "# tidepool") {
+		t.Fatalf("notes must not carry the header:\n%s", notes)
+	}
+}
+
 func TestExportTaskFilter(t *testing.T) {
 	e, f := newBriefFixture(t)
 	out := e.mustRun("export", "--format", "json", "--task", "TP-04").out

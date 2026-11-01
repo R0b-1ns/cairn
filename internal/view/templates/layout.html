@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>{{.Title}} · {{.Project}} · cairn</title>
+<link rel="stylesheet" href="{{.Root}}assets/app.css">
+</head>
+<body data-view="{{.Active}}">
+<p class="banner" role="note">Generated from the cairn database. This page is read-only and not authoritative: the <code>cairn</code> CLI is the source of truth. Generated {{.Generated}}.</p>
+<div class="layout">
+<nav class="sidebar" aria-label="Views and filters">
+<p class="project">{{.Project}}</p>
+<ul class="views">
+<li><a href="{{.Root}}index.html"{{if eq .Active "notes"}} aria-current="page"{{end}}>Notes</a></li>
+<li><a href="{{.Root}}decisions.html"{{if eq .Active "decisions"}} aria-current="page"{{end}}>Decisions</a></li>
+<li><a href="{{.Root}}open-points.html"{{if eq .Active "open"}} aria-current="page"{{end}}>Open points</a></li>
+<li><a href="{{.Root}}helpers.html"{{if eq .Active "helpers"}} aria-current="page"{{end}}>Helpers</a></li>
+</ul>
+{{- if eq .Active "note"}}
+<p class="back"><a href="{{.Root}}index.html">← All notes</a></p>
+{{- end}}
+{{- if .Listing}}
+<form class="filters" id="filters" autocomplete="off">
+<h2>Filters</h2>
+<label for="f-text">Search</label>
+<input type="search" id="f-text" name="text" placeholder="Text, ID, title">
+{{- if .Notes}}
+<label for="f-status">Status</label>
+<select id="f-status" name="status">
+<option value="">Any</option>
+{{- range .Filters.Statuses}}
+<option value="{{.Value}}">{{.Label}}</option>
+{{- end}}
+</select>
+{{- end}}
+<label for="f-task">Task</label>
+<select id="f-task" name="task">
+<option value="*">Any</option>
+{{- range .Filters.Tasks}}
+<option value="{{.Value}}"{{if .Base}} data-base="true"{{end}}>{{.Label}}</option>
+{{- end}}
+</select>
+<label for="f-repo">Repo</label>
+<select id="f-repo" name="repo">
+<option value="*">Any</option>
+{{- range .Filters.Repos}}
+<option value="{{.Value}}">{{.Label}}</option>
+{{- end}}
+</select>
+<label for="f-agent">Agent</label>
+<select id="f-agent" name="agent">
+<option value="*">Any</option>
+{{- range .Filters.Agents}}
+<option value="{{.Value}}">{{.Label}}</option>
+{{- end}}
+</select>
+<label for="f-from">From</label>
+<input type="date" id="f-from" name="from">
+<label for="f-to">To</label>
+<input type="date" id="f-to" name="to">
+{{- if .Entries}}
+<label class="check"><input type="checkbox" id="show-closed" name="closed"> Show closed</label>
+{{- end}}
+<button type="reset" id="f-reset">Clear filters</button>
+</form>
+{{- end}}
+</nav>
+<main class="main">
+{{template "content" .}}
+</main>
+</div>
+<script src="{{.Root}}data.js"></script>
+<script src="{{.Root}}assets/app.js"></script>
+</body>
+</html>

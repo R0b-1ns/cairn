@@ -147,12 +147,36 @@ func writeNew(path, body string, force bool) error {
 }
 
 func renderMarkdown(s *session, doc exportDoc) (string, error) {
+	notes, err := renderMarkdownNotes(s, doc)
+	if err != nil {
+		return "", err
+	}
+	return renderMarkdownHeader(doc.Project) + notes, nil
+}
+
+// renderMarkdownHeader is the project name line and the context paragraph.
+func renderMarkdownHeader(p model.Project) string {
 	var b strings.Builder
-	p := doc.Project
 	fmt.Fprintf(&b, "# %s\n\n", sanitize(p.Name))
 	if p.Context != "" {
 		fmt.Fprintf(&b, "%s\n\n", sanitize(p.Context))
 	}
+	return b.String()
+}
+
+// joinSanitized cleans each stored value on its own, so an unterminated escape
+// sequence in one value cannot swallow the values after it, then joins them.
+func joinSanitized(l []string) string {
+	out := make([]string, len(l))
+	for i, v := range l {
+		out[i] = sanitize(v)
+	}
+	return strings.Join(out, ", ")
+}
+
+// renderMarkdownNotes is everything after the header: the notes and their addenda.
+func renderMarkdownNotes(s *session, doc exportDoc) (string, error) {
+	var b strings.Builder
 	entry := func(e model.Entry) (string, error) {
 		info, err := s.St.Entry(e.ID)
 		if err != nil {
@@ -160,16 +184,16 @@ func renderMarkdown(s *session, doc exportDoc) (string, error) {
 		}
 		by := ""
 		if e.By != "" {
-			by = "[" + e.By + "] "
+			by = "[" + sanitize(e.By) + "] "
 		}
-		return fmt.Sprintf("- `%s` %s%s%s\n", e.ID, by, indent(e.Text, "  "), stateMarker(info)), nil
+		return fmt.Sprintf("- `%s` %s%s%s\n", sanitize(e.ID), by, indent(e.Text, "  "), stateMarker(info)), nil
 	}
 	byAdd := map[string][]model.Addendum{}
 	for _, a := range doc.Addenda {
 		byAdd[a.NoteID] = append(byAdd[a.NoteID], a)
 	}
 	for _, n := range doc.Notes {
-		fmt.Fprintf(&b, "## %s  %s\n\n", n.ID, sanitize(n.Title))
+		fmt.Fprintf(&b, "## %s  %s\n\n", sanitize(n.ID), sanitize(n.Title))
 		task := n.Task
 		if task == "" {
 			task = "-"
@@ -178,7 +202,7 @@ func renderMarkdown(s *session, doc exportDoc) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		fmt.Fprintf(&b, "task: %s · repo: %s · agent: %s (%s) · at: %s · status: %s\n\n", sanitize(task), sanitize(n.Repo), sanitize(n.Agent), sanitize(n.Model), n.At, cur)
+		fmt.Fprintf(&b, "task: %s · repo: %s · agent: %s (%s) · at: %s · status: %s\n\n", sanitize(task), sanitize(n.Repo), sanitize(n.Agent), sanitize(n.Model), sanitize(n.At), sanitize(string(cur)))
 		for _, t := range model.EntryTypes {
 			wrote := false
 			for _, e := range n.Entries {
@@ -202,26 +226,26 @@ func renderMarkdown(s *session, doc exportDoc) (string, error) {
 		if len(n.None) > 0 {
 			var ts []string
 			for _, t := range n.None {
-				ts = append(ts, string(t))
+				ts = append(ts, sanitize(string(t)))
 			}
 			fmt.Fprintf(&b, "none: %s\n\n", strings.Join(ts, ", "))
 		}
 		if len(n.Resolves) > 0 {
-			fmt.Fprintf(&b, "resolves: %s\n\n", strings.Join(n.Resolves, ", "))
+			fmt.Fprintf(&b, "resolves: %s\n\n", joinSanitized(n.Resolves))
 		}
 		if len(n.Supersedes) > 0 {
-			fmt.Fprintf(&b, "supersedes: %s\n\n", strings.Join(n.Supersedes, ", "))
+			fmt.Fprintf(&b, "supersedes: %s\n\n", joinSanitized(n.Supersedes))
 		}
 		if len(n.Impacts) > 0 {
-			fmt.Fprintf(&b, "impacts: %s\n\n", sanitize(strings.Join(n.Impacts, ", ")))
+			fmt.Fprintf(&b, "impacts: %s\n\n", joinSanitized(n.Impacts))
 		}
 		if len(n.Commits) > 0 {
-			fmt.Fprintf(&b, "commits: %s\n\n", sanitize(strings.Join(n.Commits, ", ")))
+			fmt.Fprintf(&b, "commits: %s\n\n", joinSanitized(n.Commits))
 		}
 		for _, a := range byAdd[n.ID] {
-			fmt.Fprintf(&b, "#### addendum %s · %s (%s) · %s", a.ID, sanitize(a.Agent), sanitize(a.Model), a.At)
+			fmt.Fprintf(&b, "#### addendum %s · %s (%s) · %s", sanitize(a.ID), sanitize(a.Agent), sanitize(a.Model), sanitize(a.At))
 			if a.Status != "" {
-				fmt.Fprintf(&b, " · status: %s", a.Status)
+				fmt.Fprintf(&b, " · status: %s", sanitize(string(a.Status)))
 			}
 			b.WriteString("\n\n")
 			for _, e := range a.Entries {
@@ -232,10 +256,10 @@ func renderMarkdown(s *session, doc exportDoc) (string, error) {
 				b.WriteString(line)
 			}
 			if len(a.Resolves) > 0 {
-				fmt.Fprintf(&b, "- resolves: %s\n", strings.Join(a.Resolves, ", "))
+				fmt.Fprintf(&b, "- resolves: %s\n", joinSanitized(a.Resolves))
 			}
 			if len(a.Supersedes) > 0 {
-				fmt.Fprintf(&b, "- supersedes: %s\n", strings.Join(a.Supersedes, ", "))
+				fmt.Fprintf(&b, "- supersedes: %s\n", joinSanitized(a.Supersedes))
 			}
 			b.WriteString("\n")
 		}

@@ -1,0 +1,50 @@
+{{define "content"}}
+<header class="head">
+<h1>{{.Title}}</h1>
+<p class="tools"><span id="count" class="count"></span>
+<button type="button" id="download-view" data-file="{{.Content.Download}}" data-title="{{.Project}} — {{.Title}}" data-noun="{{.Content.Noun}}">Download this view as Markdown</button></p>
+</header>
+{{- if .Content.Rows}}
+<div class="table-wrap">
+<table id="rows" class="rows">
+<thead>
+<tr>
+<th scope="col" data-sort="id"><button type="button">ID</button></th>
+<th scope="col" data-sort="task"><button type="button">Task</button></th>
+<th scope="col" data-sort="repo"><button type="button">Repo</button></th>
+<th scope="col" data-sort="at" aria-sort="descending"><button type="button">Date</button></th>
+<th scope="col" data-sort="body"><button type="button">Text</button></th>
+{{- if .Content.Author}}
+<th scope="col" data-sort="by"><button type="button">Author</button></th>
+{{- end}}
+<th scope="col" data-sort="state"><button type="button">State</button></th>
+<th scope="col" data-sort="note"><button type="button">Note</button></th>
+</tr>
+</thead>
+<tbody>
+{{- $author := .Content.Author}}
+{{- range .Content.Rows}}
+<tr data-id="{{.ID}}" data-task="{{.Task}}" data-task-base="{{.TaskBase}}" data-repo="{{.Repo}}" data-agent="{{.Agent}}" data-at="{{.At}}" data-body="{{.Text}}" data-by="{{.By}}" data-state="{{.State}}" data-note="{{.NoteID}}" data-text="{{.Search}}" data-closed="{{.Closed}}"{{if .Closed}} class="closed" hidden{{end}}>
+<td><code>{{.ID}}</code></td>
+<td>{{dash .Task}}</td>
+<td>{{.Repo}}</td>
+<td class="nowrap"><time datetime="{{.At}}">{{date .At}}</time></td>
+<td class="text">{{.Text}}</td>
+{{- if $author}}
+<td>{{dash .By}}</td>
+{{- end}}
+<td><span class="state state-{{.State}}">{{.State}}</span></td>
+<td><a href="notes/{{.NoteID}}.html#{{.ID}}"><code>{{.NoteID}}</code></a></td>
+</tr>
+{{- end}}
+</tbody>
+</table>
+</div>
+{{- else}}
+<p class="empty">No {{.Content.Noun}} yet.</p>
+{{- end}}
+{{- if .Content.AllClosed}}
+<p class="empty" id="all-closed">All {{.Content.Noun}} are closed. Tick Show closed to see them.</p>
+{{- end}}
+<p class="empty" id="no-match" hidden>No matching {{.Content.Noun}}.</p>
+{{end}}

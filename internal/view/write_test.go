@@ -1,0 +1,647 @@
+package view
+
+import (
+	"bytes"
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"testing"
+
+	"github.com/R0b-1ns/cairn/internal/model"
+	"github.com/R0b-1ns/cairn/internal/store"
+)
+
+const hostile = `</script><img src=x onerror=alert(1)>"&'`
+
+// sampleSite builds a site by hand: two notes, the second closing entries of the first through an addendum and a note.
+func sampleSite() *Site {
+	n1 := model.Note{
+		ID: "n-aaaaaa", Agent: "builder", Repo: "server", At: "2026-10-28T10:00:00Z", Task: "TP-01", Model: "opus",
+		Title: "Add the index", Status: model.StatusInProgress,
+		Entries: []model.Entry{
+			{ID: "e-aaaaa1", Type: model.TypeChange, Text: "added the b-tree"},
+			{ID: "e-aaaaa2", Type: model.TypeDecision, Text: "use a b-tree", By: "user"},
+			{ID: "e-aaaaa3", Type: model.TypeOpen, Text: "what about deletes?"},
+		},
+		None:    []model.EntryType{model.TypeNote, model.TypeHelper},
+		Impacts: []string{"storage", "api"},
+		Commits: []string{"abc1234"},
+	}
+	a1 := model.Addendum{ID: "a-aaaaa1", NoteID: "n-aaaaaa", Agent: "reviewer", Model: "sonnet", At: "2026-10-29T09:00:00Z",
+		Status: model.StatusDone, Entries: []model.Entry{{ID: "e-aaaaa4", Type: model.TypeNote, Text: "reviewed"}},
+		Resolves: []string{"e-aaaaa3"}}
+	n2 := model.Note{
+		ID: "n-bbbbbb", Agent: "planner", Repo: "web", At: "2026-10-30T10:00:00Z", Model: "haiku",
+		Title: "Switch to hash", Status: model.StatusBlocked,
+		Entries: []model.Entry{
+			{ID: "e-bbbbb1", Type: model.TypeDecision, Text: "use a hash", By: "agent"},
+			{ID: "e-bbbbb2", Type: model.TypeHelper, Text: "run make bench"},
+		},
+		None:       []model.EntryType{model.TypeChange, model.TypeOpen, model.TypeNote},
+		Supersedes: []string{"e-aaaaa2"},
+	}
+	info := func(e model.Entry, note, add, task, repo, at string, closedBy string) store.EntryInfo {
+		return store.EntryInfo{Entry: e, NoteID: note, AddendumID: add, Task: task, Repo: repo, At: at,
+			Closed: closedBy != "", ClosedBy: closedBy}
+	}
+	i1 := info(n1.Entries[0], n1.ID, "", "TP-01", "server", n1.At, "")
+	i2 := info(n1.Entries[1], n1.ID, "", "TP-01", "server", n1.At, "n-bbbbbb")
+	i3 := info(n1.Entries[2], n1.ID, "", "TP-01", "server", n1.At, "a-aaaaa1")
+	i4 := info(a1.Entries[0], n1.ID, a1.ID, "TP-01", "server", a1.At, "")
+	j1 := info(n2.Entries[0], n2.ID, "", "", "web", n2.At, "")
+	j2 := info(n2.Entries[1], n2.ID, "", "", "web", n2.At, "")
+	return &Site{
+		Project:        model.Project{Name: "tidepool", Mode: model.ModeProject, Context: "Tide data service."},
+		Generated:      "2026-10-31T00:00:00Z",
+		MarkdownHeader: "# tidepool\n\nTide data service.\n\n",
+		Notes: []NoteView{
+			{Header: store.NoteHeader{ID: n2.ID, Repo: "web", Agent: "planner", Model: "haiku", At: n2.At, Title: n2.Title, Status: model.StatusBlocked},
+				Written: model.StatusBlocked, Note: n2, OpenPoints: 0,
+				States:   map[string]store.EntryInfo{j1.ID: j1, j2.ID: j2},
+				Markdown: "## n-bbbbbb Switch to hash\n\n"},
+			{Header: store.NoteHeader{ID: n1.ID, Task: "TP-01", Repo: "server", Agent: "builder", Model: "opus", At: n1.At, Title: n1.Title, Status: model.StatusDone},
+				Written: model.StatusInProgress, Note: n1, Addenda: []model.Addendum{a1}, OpenPoints: 0,
+				States:   map[string]store.EntryInfo{i1.ID: i1, i2.ID: i2, i3.ID: i3, i4.ID: i4},
+				Markdown: "## n-aaaaaa Add the index\n\n"},
+		},
+		Entries: []EntryRow{
+			{EntryInfo: j1, Agent: "planner"}, {EntryInfo: j2, Agent: "planner"},
+			{EntryInfo: i4, Agent: "reviewer"},
+			{EntryInfo: i1, Agent: "builder"}, {EntryInfo: i2, Agent: "builder"}, {EntryInfo: i3, Agent: "builder"},
+		},
+	}
+}
+
+var siteFiles = []string{
+	".gitignore", "index.html", "decisions.html", "open-points.html", "helpers.html",
+	"notes/n-aaaaaa.html", "notes/n-aaaaaa.md", "notes/n-bbbbbb.html", "notes/n-bbbbbb.md",
+	"assets/app.css", "assets/app.js", "data.js",
+}
+
+func writeSite(t *testing.T, s *Site) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "view")
+	if err := Write(dir, s); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func readFile(t *testing.T, dir, name string) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(dir, name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func TestWriteCreatesFiles(t *testing.T) {
+	dir := writeSite(t, sampleSite())
+	for _, f := range siteFiles {
+		fi, err := os.Lstat(filepath.Join(dir, f))
+		if err != nil {
+			t.Fatalf("%s: %v", f, err)
+		}
+		if !fi.Mode().IsRegular() || fi.Mode().Perm() != 0o600 {
+			t.Fatalf("%s mode %v", f, fi.Mode())
+		}
+	}
+	for _, d := range []string{"", "notes", "assets"} {
+		fi, err := os.Lstat(filepath.Join(dir, d))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !fi.IsDir() || fi.Mode().Perm() != 0o700 {
+			t.Fatalf("%q mode %v", d, fi.Mode())
+		}
+	}
+	if got := readFile(t, dir, ".gitignore"); got != "*\n" {
+		t.Fatalf(".gitignore %q", got)
+	}
+}
+
+func snapshot(t *testing.T, dir string) map[string][]byte {
+	t.Helper()
+	out := map[string][]byte{}
+	err := filepath.Walk(dir, func(p string, fi os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if fi.Mode().IsRegular() {
+			b, err := os.ReadFile(p)
+			if err != nil {
+				return err
+			}
+			rel, _ := filepath.Rel(dir, p)
+			out[rel] = b
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func TestWriteIdempotent(t *testing.T) {
+	s := sampleSite()
+	dir := writeSite(t, s)
+	first := snapshot(t, dir)
+	// a pre-existing file with loose permissions is tightened on rewrite
+	if err := os.Chmod(filepath.Join(dir, "index.html"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := Write(dir, s); err != nil {
+		t.Fatal(err)
+	}
+	second := snapshot(t, dir)
+	if len(first) != len(second) {
+		t.Fatalf("files %d then %d", len(first), len(second))
+	}
+	for k, v := range first {
+		if !bytes.Equal(v, second[k]) {
+			t.Fatalf("%s changed", k)
+		}
+	}
+	fi, _ := os.Stat(filepath.Join(dir, "index.html"))
+	if fi.Mode().Perm() != 0o600 {
+		t.Fatalf("mode %v", fi.Mode())
+	}
+}
+
+func TestWriteRefusesSymlinkDir(t *testing.T) {
+	base := t.TempDir()
+	target := filepath.Join(base, "target")
+	if err := os.Mkdir(target, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(base, "view")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	err := Write(link, sampleSite())
+	if err == nil || !strings.Contains(err.Error(), link) {
+		t.Fatalf("err %v", err)
+	}
+	ents, _ := os.ReadDir(target)
+	if len(ents) != 0 {
+		t.Fatalf("target touched: %d entries", len(ents))
+	}
+}
+
+func TestWriteRefusesSymlinkFile(t *testing.T) {
+	dir := writeSite(t, sampleSite())
+	outside := filepath.Join(t.TempDir(), "outside")
+	if err := os.WriteFile(outside, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	idx := filepath.Join(dir, "index.html")
+	os.Remove(idx)
+	if err := os.Symlink(outside, idx); err != nil {
+		t.Fatal(err)
+	}
+	if err := Write(dir, sampleSite()); err == nil || !strings.Contains(err.Error(), idx) {
+		t.Fatalf("err %v", err)
+	}
+	if b, _ := os.ReadFile(outside); string(b) != "keep" {
+		t.Fatalf("outside changed: %q", b)
+	}
+}
+
+func TestWriteRefusesRegularFileDir(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "view")
+	if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := Write(p, sampleSite())
+	if err == nil || !strings.Contains(err.Error(), p) {
+		t.Fatalf("err %v", err)
+	}
+}
+
+func TestWriteRequiresParent(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "missing", "view")
+	if err := Write(p, sampleSite()); err == nil {
+		t.Fatal("no error")
+	}
+}
+
+func TestWriteRefusesBadNoteID(t *testing.T) {
+	s := sampleSite()
+	s.Notes[0].Header.ID = "../evil"
+	if err := Write(filepath.Join(t.TempDir(), "view"), s); err == nil {
+		t.Fatal("no error")
+	}
+}
+
+func TestWriteEscapesHostileText(t *testing.T) {
+	s := sampleSite()
+	s.Notes[0].Header.Title = hostile
+	s.Notes[0].Note.Title = hostile
+	s.Notes[0].Header.Agent = hostile
+	s.Notes[0].Note.Agent = hostile
+	s.Notes[0].Note.Entries[0].Text = hostile
+	s.Notes[0].Markdown = hostile
+	s.MarkdownHeader = hostile
+	for i := range s.Entries {
+		if s.Entries[i].ID == "e-bbbbb1" {
+			s.Entries[i].Text = hostile
+			s.Entries[i].Agent = hostile
+		}
+	}
+	dir := writeSite(t, s)
+	escaped := "&lt;/script&gt;&lt;img src=x onerror=alert(1)&gt;&#34;&amp;&#39;"
+	for _, f := range []string{"index.html", "decisions.html", "notes/n-bbbbbb.html"} {
+		page := readFile(t, dir, f)
+		if strings.Contains(page, hostile) || strings.Contains(page, "<img") {
+			t.Fatalf("%s contains raw hostile text", f)
+		}
+		if !strings.Contains(page, escaped) {
+			t.Fatalf("%s lacks escaped text", f)
+		}
+	}
+	data := readFile(t, dir, "data.js")
+	if strings.Contains(strings.ToLower(data), "</script") || strings.Contains(data, "<") {
+		t.Fatalf("data.js not escaped: %s", data)
+	}
+}
+
+func TestWriteEmptySite(t *testing.T) {
+	s := &Site{Project: model.Project{Name: "empty"}, Generated: "2026-10-31T00:00:00Z", MarkdownHeader: "# empty\n\n",
+		Notes: []NoteView{}, Entries: []EntryRow{}}
+	dir := writeSite(t, s)
+	want := map[string]string{
+		"index.html": "No notes yet.", "decisions.html": "No decisions yet.",
+		"open-points.html": "No open points yet.", "helpers.html": "No helpers yet.",
+	}
+	for f, msg := range want {
+		if page := readFile(t, dir, f); !strings.Contains(page, msg) {
+			t.Fatalf("%s lacks %q", f, msg)
+		}
+	}
+	if !strings.Contains(readFile(t, dir, "index.html"), "No matching notes.") {
+		t.Fatal("no matching message missing")
+	}
+}
+
+func TestWriteAllClosedEntriesAndAllNone(t *testing.T) {
+	s := sampleSite()
+	// keep only the superseded decision and the resolved open point
+	s.Entries = []EntryRow{s.Entries[4], s.Entries[5]}
+	nv := &s.Notes[0]
+	nv.Note.Entries = nil
+	nv.Note.None = []model.EntryType{model.TypeChange, model.TypeDecision, model.TypeOpen, model.TypeNote, model.TypeHelper}
+	dir := writeSite(t, s)
+	page := readFile(t, dir, "decisions.html")
+	if !strings.Contains(page, "use a b-tree") || !strings.Contains(page, `data-closed="true"`) {
+		t.Fatal("closed decision not listed")
+	}
+	if !strings.Contains(page, `id="show-closed"`) || !strings.Contains(page, "Show closed") {
+		t.Fatal("show closed control missing")
+	}
+	// every row is closed: a visible server-side message, plus the no-match element
+	allClosed := regexp.MustCompile(`<p class="empty" id="all-closed">All decisions are closed\. Tick Show closed to see them\.</p>`)
+	if !allClosed.MatchString(page) {
+		t.Fatal("all-closed message missing or hidden on decisions")
+	}
+	if !strings.Contains(page, `id="no-match" hidden>No matching decisions.`) {
+		t.Fatal("no-match element missing on decisions")
+	}
+	open := readFile(t, dir, "open-points.html")
+	if !strings.Contains(open, `<p class="empty" id="all-closed">All open points are closed. Tick Show closed to see them.</p>`) {
+		t.Fatal("all-closed message missing on open points")
+	}
+	if !strings.Contains(open, `id="no-match" hidden>No matching open points.`) {
+		t.Fatal("no-match element missing on open points")
+	}
+	// with an open row, or no closed state at all, there is no all-closed message
+	if full := readFile(t, writeSite(t, sampleSite()), "decisions.html"); strings.Contains(full, `id="all-closed"`) {
+		t.Fatal("all-closed message shown though a decision is active")
+	}
+	if strings.Contains(readFile(t, dir, "helpers.html"), `id="all-closed"`) {
+		t.Fatal("all-closed message on helpers")
+	}
+	note := readFile(t, dir, "notes/n-bbbbbb.html")
+	if got := strings.Count(note, `class="none"`); got != 5 {
+		t.Fatalf("none count %d", got)
+	}
+}
+
+func TestNotePageContents(t *testing.T) {
+	dir := writeSite(t, sampleSite())
+	page := readFile(t, dir, "notes/n-aaaaaa.html")
+	for _, want := range []string{"builder", "opus", "server", "storage", "api", "TP-01", "2026-10-28",
+		"abc1234", "status-done", "Written status", "in_progress", "← All notes", "reviewer", "reviewed"} {
+		if !strings.Contains(page, want) {
+			t.Fatalf("note page lacks %q", want)
+		}
+	}
+	last := -1
+	for _, h := range []string{"<h2>Changes</h2>", "<h2>Decisions</h2>", "<h2>Open points</h2>", "<h2>Notes</h2>", "<h2>Helpers</h2>", "<h2>Addenda</h2>"} {
+		i := strings.Index(page, h)
+		if i < 0 || i < last {
+			t.Fatalf("heading %s at %d after %d", h, i, last)
+		}
+		last = i
+	}
+	// superseded decision struck and linking to the closing note; resolved open point linking to the addendum
+	if !regexp.MustCompile(`<s>use a b-tree</s>`).MatchString(page) {
+		t.Fatal("decision not struck")
+	}
+	if !strings.Contains(page, `href="n-bbbbbb.html"`) || !strings.Contains(page, `href="n-aaaaaa.html#a-aaaaa1"`) {
+		t.Fatal("closer links missing")
+	}
+	if !regexp.MustCompile(`<a [^>]*href="n-aaaaaa\.md"[^>]*download`).MatchString(page) {
+		t.Fatal("download link missing")
+	}
+	// written status is shown only when it differs
+	other := readFile(t, dir, "notes/n-bbbbbb.html")
+	if strings.Contains(other, "Written status") {
+		t.Fatal("written status shown though equal")
+	}
+}
+
+func TestNotesTableRowAttributes(t *testing.T) {
+	dir := writeSite(t, sampleSite())
+	page := readFile(t, dir, "index.html")
+	row := regexp.MustCompile(`(?s)<tr [^>]*data-id="n-bbbbbb"[^>]*>.*?</tr>`).FindString(page)
+	if row == "" {
+		t.Fatal("row missing")
+	}
+	for _, want := range []string{`data-status="blocked"`, `data-task=""`, `data-repo="web"`, `data-agent="planner"`,
+		`data-at="2026-10-30T10:00:00Z"`, `data-text="`, `<td>-</td>`, `href="notes/n-bbbbbb.html"`} {
+		if !strings.Contains(row, want) {
+			t.Fatalf("row lacks %q: %s", want, row)
+		}
+	}
+	if !strings.Contains(page, `data-task="TP-01"`) {
+		t.Fatal("task attribute missing")
+	}
+}
+
+func TestNoteMarkdownFileIsHeaderPlusNote(t *testing.T) {
+	s := sampleSite()
+	dir := writeSite(t, s)
+	if got := readFile(t, dir, "notes/n-aaaaaa.md"); got != s.MarkdownHeader+s.Notes[1].Markdown {
+		t.Fatalf("md %q", got)
+	}
+}
+
+// A browser ignores the download attribute on a file:// link and shows the .md as
+// text instead, so the note page loads data.js and marks its link for app.js,
+// which builds the same file in the page.
+func TestNotePageDownloadWorksFromDisk(t *testing.T) {
+	dir := writeSite(t, sampleSite())
+	page := readFile(t, dir, "notes/n-aaaaaa.html")
+	for _, want := range []string{
+		`<script src="../data.js"></script>`,
+		`id="download-note"`, `data-note="n-aaaaaa"`, `href="n-aaaaaa.md"`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Fatalf("note page lacks %s", want)
+		}
+	}
+	js := readFile(t, dir, "assets/app.js")
+	if !strings.Contains(js, `getElementById("download-note")`) {
+		t.Fatal("app.js does not handle the note download")
+	}
+}
+
+func TestDataJSCarriesAgentAndMarkdown(t *testing.T) {
+	s := sampleSite()
+	dir := writeSite(t, s)
+	data := readFile(t, dir, "data.js")
+	const pre = "window.CAIRN = "
+	if !strings.HasPrefix(data, pre) || !strings.HasSuffix(data, ";\n") {
+		t.Fatalf("data.js shape: %q", data)
+	}
+	var got struct {
+		Header  string            `json:"header"`
+		Notes   map[string]string `json:"notes"`
+		Entries map[string]struct {
+			Text, By, Note, Agent, Closed string
+		} `json:"entries"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSuffix(strings.TrimPrefix(data, pre), ";\n")), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Header != s.MarkdownHeader || got.Notes["n-aaaaaa"] != s.Notes[1].Markdown {
+		t.Fatalf("data %+v", got)
+	}
+	e := got.Entries["e-aaaaa4"]
+	if e.Text != "reviewed" || e.Note != "n-aaaaaa" || e.Agent != "reviewer" {
+		t.Fatalf("entry %+v", e)
+	}
+	if got.Entries["e-aaaaa2"].By != "user" {
+		t.Fatalf("by %+v", got.Entries["e-aaaaa2"])
+	}
+	// A closed entry says what closed it, so "Download this view" with "Show closed" ticked
+	// cannot pass a superseded decision or a resolved open point off as current.
+	if c := got.Entries["e-aaaaa2"].Closed; c != "superseded by n-bbbbbb" {
+		t.Fatalf("closed decision: %q", c)
+	}
+	if c := got.Entries["e-aaaaa3"].Closed; c != "resolved by a-aaaaa1" {
+		t.Fatalf("closed open point: %q", c)
+	}
+	if c := got.Entries["e-bbbbb1"].Closed; c != "" {
+		t.Fatalf("active entry: %q", c)
+	}
+}
+
+func TestPagesAreEnglishAndSelfContained(t *testing.T) {
+	dir := writeSite(t, sampleSite())
+	inline := regexp.MustCompile(`<script(\s[^>]*)?>`)
+	for name, b := range snapshot(t, dir) {
+		body := string(b)
+		if strings.Contains(body, "http://") || strings.Contains(body, "https://") {
+			t.Fatalf("%s has a URL", name)
+		}
+		if strings.HasSuffix(name, ".html") {
+			for _, tag := range inline.FindAllString(body, -1) {
+				if !strings.Contains(tag, " src=") {
+					t.Fatalf("%s has inline script %s", name, tag)
+				}
+			}
+			if strings.Contains(body, " style=") || strings.Contains(body, "<style") {
+				t.Fatalf("%s has inline style", name)
+			}
+			if !strings.Contains(body, "read-only") || !strings.Contains(body, "source of truth") ||
+				!strings.Contains(body, "2026-10-31T00:00:00Z") {
+				t.Fatalf("%s lacks the banner", name)
+			}
+		}
+	}
+}
+
+// TestAppJSLogic runs the pure functions of app.js through node, when node is installed.
+func TestAppJSLogic(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node not installed")
+	}
+	script := `
+const assert = require("assert");
+const app = require(process.argv[1]);
+const any = {text: "", status: "", task: "*", repo: "*", agent: "*", from: "", to: "", showClosed: false};
+const row = {status: "done", task: "", repo: "web", agent: "planner", at: "2026-10-30T10:00:00Z", text: "n-1 switch to hash", closed: false};
+assert.ok(app.matches(row, any));
+assert.ok(app.matches(row, {...any, task: ""}));
+assert.ok(!app.matches(row, {...any, task: "TP-01"}));
+assert.ok(!app.matches(row, {...any, status: "blocked"}));
+assert.ok(app.matches(row, {...any, status: "done", repo: "web", agent: "planner"}));
+assert.ok(!app.matches(row, {...any, agent: "builder"}));
+assert.ok(app.matches(row, {...any, from: "2026-10-30", to: "2026-10-30"}));
+assert.ok(!app.matches(row, {...any, from: "2026-10-31"}));
+assert.ok(!app.matches(row, {...any, to: "2026-10-29"}));
+assert.ok(app.matches(row, {...any, text: "  HASH switch "}));
+assert.ok(!app.matches(row, {...any, text: "hash tree"}));
+assert.ok(!app.matches({...row, closed: true}, any));
+assert.ok(app.matches({...row, closed: true}, {...any, showClosed: true}));
+const data = {header: "# p\n\n", notes: {"n-1": "## one\n\n", "n-2": "## two\n\n"},
+  entries: {"e-1": {text: "use\na hash", by: "user", note: "n-1", agent: "a"}, "e-2": {text: "run it", by: "", note: "n-2", agent: "b"},
+    "e-3": {text: "use a tree", by: "agent", note: "n-1", agent: "a", closed: "superseded by a-1"}}};
+assert.strictEqual(app.notesMarkdown(data, ["n-2", "n-1"]), "# p\n\n## two\n\n## one\n\n");
+assert.strictEqual(app.notesMarkdown(data, []), "# p\n\n");
+assert.strictEqual(app.entriesMarkdown(data, ["e-1", "e-2"], "p — Decisions", "decisions"),
+  "# p — Decisions\n\n- ` + "`e-1`" + ` [user] use a hash (note n-1)\n- ` + "`e-2`" + ` run it (note n-2)\n");
+assert.strictEqual(app.entriesMarkdown(data, ["e-3"], "p — Decisions", "decisions"),
+  "# p — Decisions\n\n- ` + "`e-3`" + ` [agent] use a tree (note n-1)  (superseded by a-1)\n");
+// An empty view still says what it is and that nothing matched.
+assert.strictEqual(app.entriesMarkdown(data, [], "p — Open points", "open points"),
+  "# p — Open points\n\nNo matching open points.\n");
+assert.strictEqual(app.entriesMarkdown(data, ["e-missing"], "p — Helpers", "helpers"),
+  "# p — Helpers\n\nNo matching helpers.\n");
+// A base task selects itself and its extensions; an extension selects exactly itself.
+const base = {...row, task: "TP-03", taskBase: "TP-03"}, ext = {...row, task: "TP-03.1", taskBase: "TP-03"};
+assert.ok(app.matches(base, {...any, task: "TP-03", taskIsBase: true}));
+assert.ok(app.matches(ext, {...any, task: "TP-03", taskIsBase: true}));
+assert.ok(app.matches(ext, {...any, task: "TP-03.1", taskIsBase: false}));
+assert.ok(!app.matches(base, {...any, task: "TP-03.1", taskIsBase: false}));
+assert.ok(!app.matches({...row, task: "TP-30", taskBase: "TP-30"}, {...any, task: "TP-03", taskIsBase: true}));
+assert.ok(!app.matches(base, {...any, task: "", taskIsBase: false}));
+assert.ok(app.compare("2", "10", true) < 0);
+assert.ok(app.compare("b", "A", false) > 0);
+`
+	abs, err := filepath.Abs(filepath.Join("assets", "app.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command(node, "-e", script, abs).CombinedOutput()
+	if err != nil {
+		t.Fatalf("node: %v\n%s", err, out)
+	}
+}
+
+// taskSite is the sample site with the default task pattern, an extension note of
+// TP-01 (with a decision) and a note of TP-02.1 whose base has no note of its own.
+func taskSite() *Site {
+	s := sampleSite()
+	s.Project.TaskPattern = model.DefaultTaskPattern
+	add := func(id, task, at string) {
+		n := model.Note{ID: id, Agent: "builder", Repo: "server", At: at, Task: task, Title: "Note " + id, Status: model.StatusDone}
+		s.Notes = append([]NoteView{{
+			Header:  store.NoteHeader{ID: id, Task: task, Repo: "server", Agent: "builder", At: at, Title: n.Title, Status: model.StatusDone},
+			Written: model.StatusDone, Note: n, States: map[string]store.EntryInfo{}, Markdown: "## " + id + "\n\n",
+		}}, s.Notes...)
+	}
+	add("n-cccccc", "TP-01.1", "2026-10-30T11:00:00Z")
+	add("n-dddddd", "TP-02.1", "2026-10-30T12:00:00Z")
+	e := model.Entry{ID: "e-ccccc1", Type: model.TypeDecision, Text: "keep the b-tree for ranges", By: "user"}
+	s.Notes[1].Note.Entries = []model.Entry{e}
+	info := store.EntryInfo{Entry: e, NoteID: "n-cccccc", Task: "TP-01.1", Repo: "server", At: "2026-10-30T11:00:00Z"}
+	s.Notes[1].States[e.ID] = info
+	s.Entries = append([]EntryRow{{EntryInfo: info, Agent: "builder"}}, s.Entries...)
+	return s
+}
+
+// selectOptions returns the options of the select id on page, as `value|label|base`.
+func selectOptions(t *testing.T, page, id string) []string {
+	t.Helper()
+	sel := regexp.MustCompile(`(?s)<select id="` + id + `"[^>]*>(.*?)</select>`).FindStringSubmatch(page)
+	if sel == nil {
+		t.Fatalf("select %s missing", id)
+	}
+	var out []string
+	for _, m := range regexp.MustCompile(`<option value="([^"]*)"( data-base="true")?>([^<]*)</option>`).FindAllStringSubmatch(sel[1], -1) {
+		base := ""
+		if m[2] != "" {
+			base = "|base"
+		}
+		out = append(out, m[1]+"|"+m[3]+base)
+	}
+	return out
+}
+
+func TestTaskFilterFollowsBaseAndExtensionRule(t *testing.T) {
+	dir := writeSite(t, taskSite())
+	index := readFile(t, dir, "index.html")
+	for id, base := range map[string]string{"n-aaaaaa": "TP-01", "n-bbbbbb": "", "n-cccccc": "TP-01", "n-dddddd": "TP-02"} {
+		row := regexp.MustCompile(`<tr [^>]*data-id="` + id + `"[^>]*>`).FindString(index)
+		if !strings.Contains(row, `data-task-base="`+base+`"`) {
+			t.Errorf("note row %s lacks data-task-base %q: %s", id, base, row)
+		}
+	}
+	got := strings.Join(selectOptions(t, index, "f-task"), ", ")
+	want := "*|Any, |-, TP-01|TP-01 (incl. extensions)|base, TP-01.1|TP-01.1, TP-02|TP-02 (incl. extensions)|base, TP-02.1|TP-02.1"
+	if got != want {
+		t.Errorf("notes task options:\n got %s\nwant %s", got, want)
+	}
+	dec := readFile(t, dir, "decisions.html")
+	for id, base := range map[string]string{"e-aaaaa2": "TP-01", "e-ccccc1": "TP-01", "e-bbbbb1": ""} {
+		row := regexp.MustCompile(`<tr [^>]*data-id="` + id + `"[^>]*>`).FindString(dec)
+		if !strings.Contains(row, `data-task-base="`+base+`"`) {
+			t.Errorf("entry row %s lacks data-task-base %q: %s", id, base, row)
+		}
+	}
+	got = strings.Join(selectOptions(t, dec, "f-task"), ", ")
+	want = "*|Any, |-, TP-01|TP-01 (incl. extensions)|base, TP-01.1|TP-01.1"
+	if got != want {
+		t.Errorf("decisions task options:\n got %s\nwant %s", got, want)
+	}
+	// A base without extensions in a view is offered plainly, still as a base.
+	got = strings.Join(selectOptions(t, readFile(t, dir, "open-points.html"), "f-task"), ", ")
+	if want = "*|Any, TP-01|TP-01|base"; got != want {
+		t.Errorf("open points task options:\n got %s\nwant %s", got, want)
+	}
+}
+
+// Each view offers only the values of the rows it lists: the addendum agent
+// "reviewer" wrote no note, so the Notes view does not offer it.
+func TestFilterOptionsArePerView(t *testing.T) {
+	dir := writeSite(t, sampleSite())
+	cases := []struct{ file, sel, want string }{
+		{"index.html", "f-agent", "*|Any, builder|builder, planner|planner"},
+		{"index.html", "f-repo", "*|Any, server|server, web|web"},
+		{"decisions.html", "f-agent", "*|Any, builder|builder, planner|planner"},
+		{"open-points.html", "f-agent", "*|Any, builder|builder"},
+		{"open-points.html", "f-repo", "*|Any, server|server"},
+		{"helpers.html", "f-agent", "*|Any, planner|planner"},
+		{"helpers.html", "f-repo", "*|Any, web|web"},
+		{"helpers.html", "f-task", "*|Any, |-"},
+	}
+	for _, c := range cases {
+		got := strings.Join(selectOptions(t, readFile(t, dir, c.file), c.sel), ", ")
+		if got != c.want {
+			t.Errorf("%s %s:\n got %s\nwant %s", c.file, c.sel, got, c.want)
+		}
+	}
+}
+
+// The download of an entry view is titled with the project and the view, and
+// says "No matching <noun>." when nothing is shown; app.js reads both from the button.
+func TestEntryViewDownloadNamesTheView(t *testing.T) {
+	dir := writeSite(t, sampleSite())
+	for file, want := range map[string]string{
+		"decisions.html":   `data-file="decisions.md" data-title="tidepool — Decisions" data-noun="decisions"`,
+		"open-points.html": `data-file="open-points.md" data-title="tidepool — Open points" data-noun="open points"`,
+		"helpers.html":     `data-file="helpers.md" data-title="tidepool — Helpers" data-noun="helpers"`,
+	} {
+		if page := readFile(t, dir, file); !strings.Contains(page, want) {
+			t.Errorf("%s lacks %s", file, want)
+		}
+	}
+}

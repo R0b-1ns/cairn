@@ -1,0 +1,72 @@
+{{define "content"}}
+{{- with .Content}}
+<header class="head">
+<h1>{{.Title}}</h1>
+<p class="tools"><code>{{.ID}}</code>
+<a class="button" id="download-note" href="{{.ID}}.md" download data-note="{{.ID}}">Download as Markdown</a></p>
+</header>
+<section class="card" aria-label="Agent card">
+<dl>
+<dt>Agent</dt><dd>{{.Agent}}</dd>
+<dt>Model</dt><dd>{{.Model}}</dd>
+<dt>Repo</dt><dd>{{.Repo}}</dd>
+<dt>Impacts</dt><dd>{{if .Impacts}}{{join .Impacts ", "}}{{else}}-{{end}}</dd>
+<dt>Task</dt><dd>{{dash .Task}}</dd>
+<dt>Date</dt><dd><time datetime="{{.At}}">{{.At}}</time></dd>
+<dt>Status</dt><dd><span class="badge status-{{.Status}}">{{.Status}}</span></dd>
+{{- if .ShowWritten}}
+<dt>Written status</dt><dd><span class="badge status-{{.Written}}">{{.Written}}</span></dd>
+{{- end}}
+<dt>Commits</dt><dd>{{if .Commits}}{{range $i, $c := .Commits}}{{if $i}}, {{end}}<code>{{$c}}</code>{{end}}{{else}}-{{end}}</dd>
+</dl>
+</section>
+{{- range .Sections}}
+<section class="part">
+<h2>{{.Title}}</h2>
+{{- if .None}}
+<p class="none">none</p>
+{{- else}}
+<ul class="entries">
+{{- range .Entries}}{{template "entry" .}}{{end}}
+</ul>
+{{- end}}
+</section>
+{{- end}}
+<section class="part">
+<h2>Addenda</h2>
+{{- if .Addenda}}
+{{- range .Addenda}}
+<article class="addendum" id="{{.ID}}">
+<h3><code>{{.ID}}</code> by {{.Agent}} ({{.Model}}), <time datetime="{{.At}}">{{.At}}</time></h3>
+{{- if .Status}}
+<p>Status set to <span class="badge status-{{.Status}}">{{.Status}}</span></p>
+{{- end}}
+{{- if .Entries}}
+<ul class="entries">
+{{- range .Entries}}{{template "entry" .}}{{end}}
+</ul>
+{{- end}}
+{{- if .Resolves}}
+<p>Resolves: {{range $i, $r := .Resolves}}{{if $i}}, {{end}}<code>{{$r}}</code>{{end}}</p>
+{{- end}}
+{{- if .Supersedes}}
+<p>Supersedes: {{range $i, $r := .Supersedes}}{{if $i}}, {{end}}<code>{{$r}}</code>{{end}}</p>
+{{- end}}
+</article>
+{{- end}}
+{{- else}}
+<p class="muted">No addenda.</p>
+{{- end}}
+</section>
+{{- end}}
+{{end}}
+
+{{define "entry"}}
+<li id="{{.ID}}" class="entry{{if .Closed}} closed{{end}}">
+<span class="kind">{{.Label}}</span> <code>{{.ID}}</code>{{if .By}} <span class="by">[{{.By}}]</span>{{end}}
+<div class="text">{{if .Closed}}<s>{{.Text}}</s>{{else}}{{.Text}}{{end}}</div>
+{{- if .Closed}}
+<p class="closer">{{.CloserVerb}} {{if .Closer}}<a href="{{.Closer}}"><code>{{.CloserID}}</code></a>{{else}}<code>{{.CloserID}}</code>{{end}}</p>
+{{- end}}
+</li>
+{{- end}}
