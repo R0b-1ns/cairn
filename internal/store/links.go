@@ -86,11 +86,11 @@ func checkLinkEvent(kind, name, repo, pid string) error {
 			return fmt.Errorf("invalid repo name")
 		}
 	case evChildLinked:
-		if !validate.ValidName(name) || !validate.ValidRepo(repo) {
+		if !validate.ValidRepo(name) || !validate.ValidRepo(repo) {
 			return fmt.Errorf("invalid child name or repo name")
 		}
 	case evChildDetached:
-		if !validate.ValidName(name) {
+		if !validate.ValidRepo(name) {
 			return fmt.Errorf("invalid child name")
 		}
 	case evParentSet:
@@ -190,7 +190,7 @@ func (s *Store) AddRepo(repo string) error {
 
 // LinkChild records a child. It fails when a child of that name is active.
 func (s *Store) LinkChild(c model.Child) error {
-	if !validate.ValidName(c.Name) {
+	if !validate.ValidRepo(c.Name) {
 		return fmt.Errorf("child name %q is not a valid name", c.Name)
 	}
 	if !validate.ValidRepo(c.Repo) {

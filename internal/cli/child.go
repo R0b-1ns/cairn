@@ -25,17 +25,22 @@ func initChild(c *Ctx, parentName, repo, name string, local bool, path, context 
 	if repo == "" {
 		return fail(c, ExitUsage, "--project needs --repo (the repo name of this folder)")
 	}
+	nameFromRepo := false
 	if !local {
 		name = repo // an attached child is named after its repo
 	} else if name == "" {
-		name = repo
+		name, nameFromRepo = repo, true
 	}
 	var errs []validate.FieldError
 	if !validate.ValidRepo(repo) {
 		errs = append(errs, validate.FieldError{Field: "repo", Message: fmt.Sprintf("repo %s must be 1-40 characters of a-z, 0-9, '.', '_' or '-', starting with a letter or digit", sanitize(repo))})
 	}
-	if !validate.ValidName(name) {
-		errs = append(errs, validate.FieldError{Field: "name", Message: fmt.Sprintf("child name %s must be lowercase letters, digits, '-' or '_', starting with a letter or digit, 1-40 characters", sanitize(name))})
+	if local && !validate.ValidName(name) {
+		msg := fmt.Sprintf("project name %s must be lowercase letters, digits, '-' or '_', starting with a letter or digit, 1-40 characters", sanitize(name))
+		if nameFromRepo {
+			msg = fmt.Sprintf("the repo %s is not a valid project name: give the project name of the local child with --name", sanitize(repo))
+		}
+		errs = append(errs, validate.FieldError{Field: "name", Message: msg})
 	}
 	if !validate.ValidName(parentName) {
 		errs = append(errs, validate.FieldError{Field: "project", Message: fmt.Sprintf("project name %s is not a valid name", sanitize(parentName))})
@@ -149,7 +154,10 @@ func initChild(c *Ctx, parentName, repo, name string, local bool, path, context 
 			os.Remove(dotCairn)
 		}
 		if linked {
-			parent.DetachChild(name)
+			if err := parent.DetachChild(name); err != nil {
+				fmt.Fprintf(c.Stderr, "cairn: warning: could not record that child %s of %s is detached (%s); run: cairn project unlink %s\n",
+					sanitize(name), sanitize(parentName), sanitize(err.Error()), sanitize(name))
+			}
 		}
 	}
 	failRun := func(err error) int {

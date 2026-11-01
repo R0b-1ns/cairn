@@ -58,6 +58,9 @@ func defineInit(fs *flag.FlagSet) Handler {
 					return fail(c, ExitUsage, "--%s cannot be combined with --project: a child takes the parent's task settings and its own repo", f)
 				}
 			}
+			if given["context"] && !local {
+				return fail(c, ExitUsage, "--context with --project needs --local (an attached child has no database of its own)")
+			}
 			if given["name"] && !local {
 				return fail(c, ExitUsage, "--name with --project needs --local (an attached child is named after its repo)")
 			}

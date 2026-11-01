@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,8 +11,8 @@ import (
 
 	"github.com/R0b-1ns/cairn/internal/locate"
 	"github.com/R0b-1ns/cairn/internal/model"
-	"github.com/R0b-1ns/cairn/internal/registry"
 	"github.com/R0b-1ns/cairn/internal/store"
+	_ "modernc.org/sqlite"
 )
 
 // parentLinks opens the parent's database (the env root) and replays its links.
@@ -28,18 +30,19 @@ func parentLinks(t *testing.T, e *testEnv) store.LinkState {
 	return ls
 }
 
-func countEvents(t *testing.T, db string) int {
+// countEvents counts the rows of link_events through a raw handle.
+func countEvents(t *testing.T, dbPath string) int {
 	t.Helper()
-	st, err := store.Open(db)
+	db, err := sql.Open("sqlite", "file:"+dbPath+"?mode=ro")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
-	ls, err := st.Links()
-	if err != nil {
+	defer db.Close()
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM link_events`).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
-	return len(ls.Children) + len(ls.ExtraRepos)
+	return n
 }
 
 func TestInitAttachedChild(t *testing.T) {
@@ -146,16 +149,12 @@ func TestInitChildRefusals(t *testing.T) {
 	e := newEnv(t)
 	e.initProject()
 	pdb := filepath.Join(e.root, ".cairn", "cairn.db")
-	base := countEvents(t, pdb)
 	reg, _ := openRegistry(&Ctx{Getenv: e.getenv})
-	before, _ := reg.List()
 
 	// an active child "web" and a folder holding a database
 	if r := e.runIn(realTemp(t), "", "init", "--project", "tidepool", "--repo", "web"); r.code != 0 {
 		t.Fatal(r.err)
 	}
-	base = countEvents(t, pdb)
-	before, _ = reg.List()
 	holder := realTemp(t)
 	if r := e.runIn(holder, "", "init", "--name", "other", "--repos", "a"); r.code != 0 {
 		t.Fatal(r.err)
@@ -164,15 +163,13 @@ func TestInitChildRefusals(t *testing.T) {
 	if r := e.runIn(pointed, "", "init", "--project", "tidepool", "--repo", "docs"); r.code != 0 {
 		t.Fatal(r.err)
 	}
-	base = countEvents(t, pdb)
-	before, _ = reg.List()
 	// a child that itself has a parent: nesting
 	localChild := realTemp(t)
 	if r := e.runIn(localChild, "", "init", "--project", "tidepool", "--repo", "lib", "--local"); r.code != 0 {
 		t.Fatal(r.err)
 	}
-	base = countEvents(t, pdb)
-	before, _ = reg.List()
+	base := countEvents(t, pdb)
+	before, _ := reg.List()
 
 	cases := []struct {
 		name string
@@ -189,7 +186,9 @@ func TestInitChildRefusals(t *testing.T) {
 		{"folder with database", holder, []string{"--project", "tidepool", "--repo", "x"}, 1, ""},
 		{"folder with pointer", pointed, []string{"--project", "tidepool", "--repo", "x"}, 1, ""},
 		{"parent is a child", realTemp(t), []string{"--project", "lib", "--repo", "x"}, 1, "nesting"},
-		{"folder is a parent", e.root, []string{"--project", "other", "--repo", "x"}, 1, ""},
+		{"folder is a parent", e.root, []string{"--project", "other", "--repo", "x"}, 1, "nesting"},
+		{"context without local", realTemp(t), []string{"--project", "tidepool", "--repo", "x", "--context", "c"}, 2, "--context"},
+		{"local dotted repo without name", realTemp(t), []string{"--project", "tidepool", "--repo", "web.app", "--local"}, 3, "--name"},
 		{"bad repo", realTemp(t), []string{"--project", "tidepool", "--repo", "Bad Repo"}, 3, ""},
 		{"bad local name", realTemp(t), []string{"--project", "tidepool", "--repo", "x", "--local", "--name", "Bad"}, 3, ""},
 	}
@@ -198,6 +197,11 @@ func TestInitChildRefusals(t *testing.T) {
 			r := e.runIn(tc.dir, "", append([]string{"init"}, tc.args...)...)
 			if r.code != tc.code {
 				t.Fatalf("exit %d, want %d\n%s", r.code, tc.code, r.err)
+			}
+			if tc.dir != holder && tc.dir != pointed && tc.dir != e.root && tc.dir != localChild {
+				if _, err := os.Lstat(filepath.Join(tc.dir, ".cairn")); err == nil {
+					t.Errorf("%s: refused directory has a .cairn folder", tc.name)
+				}
 			}
 			if tc.msg != "" && !strings.Contains(r.err, tc.msg) {
 				t.Errorf("stderr %q lacks %q", r.err, tc.msg)
@@ -211,7 +215,6 @@ func TestInitChildRefusals(t *testing.T) {
 	if len(after) != len(before) {
 		t.Errorf("registry changed: %d -> %d", len(before), len(after))
 	}
-	_ = registry.Entry{}
 }
 
 func TestInitChildRepoAlreadyAllowed(t *testing.T) {
@@ -234,7 +237,10 @@ func TestInitChildRepoAlreadyAllowed(t *testing.T) {
 
 type blockReader struct{ read bool }
 
-func (b *blockReader) Read([]byte) (int, error) { b.read = true; select {} }
+func (b *blockReader) Read([]byte) (int, error) {
+	b.read = true
+	return 0, errors.New("stdin must not be read")
+}
 
 func TestInitChildNeverPrompts(t *testing.T) {
 	e := newEnv(t)
@@ -279,5 +285,58 @@ func TestInitChildMachineParent(t *testing.T) {
 	}
 	if _, found, err := locate.ReadPointer(child); err != nil || !found {
 		t.Errorf("pointer %v %v", found, err)
+	}
+}
+
+func TestInitDottedRepoChild(t *testing.T) {
+	e := newEnv(t)
+	e.initProject()
+	child := realTemp(t)
+	if r := e.runIn(child, "", "init", "--project", "tidepool", "--repo", "web.app"); r.code != 0 {
+		t.Fatalf("exit %d %s", r.code, r.err)
+	}
+	if r := e.runIn(child, "", "add", "--agent", "a", "--model", "m", "--title", "t", "--status", "done", "--change", "x", "--none", "decision,open,note,helper"); r.code != 0 {
+		t.Fatalf("add in child: %d %s", r.code, r.err)
+	}
+	if out := e.runIn(child, "", "list", "--type", "change", "--json").out; !strings.Contains(out, `"web.app"`) {
+		t.Errorf("repo not stored: %s", out)
+	}
+	if ls := parentLinks(t, e); len(ls.Children) != 1 || ls.Children[0].Name != "web.app" {
+		t.Errorf("children %+v", ls.Children)
+	}
+}
+
+func TestInitChildRollback(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("permissions do not bind root")
+	}
+	e := newEnv(t)
+	e.initProject()
+	pdb := filepath.Join(e.root, ".cairn", "cairn.db")
+	child := realTemp(t)
+	dot := filepath.Join(child, ".cairn")
+	if err := os.Mkdir(dot, 0o500); err != nil { // the pointer cannot be written
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dot, 0o700) })
+	before := countEvents(t, pdb)
+	r := e.runIn(child, "", "init", "--project", "tidepool", "--repo", "web")
+	if r.code != 1 {
+		t.Fatalf("exit %d, want 1\n%s", r.code, r.err)
+	}
+	if _, err := os.Lstat(filepath.Join(dot, "links.json")); err == nil {
+		t.Error("pointer left behind")
+	}
+	reg, _ := openRegistry(&Ctx{Getenv: e.getenv})
+	if ent, _ := reg.Get("tidepool"); len(ent.Children) != 0 {
+		t.Errorf("registry children left: %+v", ent.Children)
+	}
+	ls := parentLinks(t, e)
+	if len(ls.Children) != 0 {
+		t.Errorf("child still active: %+v", ls.Children)
+	}
+	// repo_added (web) + child_linked + child_detached, plus the id on first use
+	if n := countEvents(t, pdb); n < before+3 {
+		t.Errorf("expected a link and a detach event, events %d -> %d", before, n)
 	}
 }
