@@ -62,7 +62,7 @@ The IDs above are examples; every command prints the real ones. `--new-task` tak
 - `jira`, `linear`, `github`: you use the tracker's IDs (`PROJ-123`, `ENG-42`, `#128`). cairn only checks the format; `--task-url "https://example.atlassian.net/browse/{task}"` makes tasks links.
 - `custom`: your own format, with `--task-pattern`.
 
-Without a terminal, `init` needs one of these flags; if none is given it keeps the old `TP-03` format and says so. AI agents are told by `cairn guide` to ask you which numbering you want before running `init`.
+Without a terminal, `init` should be given one of these flags; otherwise it falls back to the old `TP-03` format and says so on standard error. AI agents are told by `cairn guide` to ask you which numbering you want before running `init`, and not to run it, or pick a mode for you, until you have answered.
 
 To link a ticket after the fact: `cairn amend n-4k7q2m --agent builder --model claude-opus-5-5 --ref https://example.atlassian.net/browse/PROJ-1`. Every note also records who wrote it and on which branch, read from git; `list` filters by `--author`, `--branch` and `--ref`.
 

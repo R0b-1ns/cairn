@@ -214,6 +214,12 @@ func TestGuideTellsAgentsToAskForNumbering(t *testing.T) {
 			t.Errorf("docs/guide.md does not contain %q", want)
 		}
 	}
+	if !strings.Contains(guide, "do not run `cairn init`") {
+		t.Error("docs/guide.md does not tell agents not to run init before the user answered")
+	}
+	if strings.Contains(guide, "cairn brief TP-03") {
+		t.Error("docs/guide.md assumes the TP task format")
+	}
 }
 
 func TestREADMEInitExamplesNameTheirMode(t *testing.T) {
