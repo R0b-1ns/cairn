@@ -2,10 +2,14 @@ package cli
 
 import (
 	"encoding/json"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/R0b-1ns/cairn/internal/gitinfo"
 	"github.com/R0b-1ns/cairn/internal/model"
 )
 
@@ -260,5 +264,31 @@ func TestAmendInvalidBranchIsValidationError(t *testing.T) {
 	r := e.run("amend", id, "--agent", "human", "--model", "none", "--status", "done", "--branch", "a\tb")
 	if r.code != 3 || !strings.Contains(r.err, "branch: ") {
 		t.Fatalf("code %d, stderr %q", r.code, r.err)
+	}
+}
+
+// TestAddWithHungGitStaysBounded: a git that never answers must cost one
+// timeout for the whole add, not one per git call, and the note is still stored.
+func TestAddWithHungGitStaysBounded(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("no sh")
+	}
+	e := newEnv(t)
+	e.mustRun("init", "--name", "tidepool", "--repos", "server")
+	bin := realTemp(t)
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	gitinfo.Reset()
+	t.Cleanup(gitinfo.Reset)
+	start := time.Now()
+	id := addNote(t, e)
+	if d := time.Since(start); d > 8*time.Second {
+		t.Fatalf("add took %v with a hung git, want under 8s", d)
+	}
+	n := shownNote(t, e, id)
+	if n.AuthorName != "" || n.AuthorEmail != "" || n.Branch != "" {
+		t.Errorf("origin = %+v, want empty", n)
 	}
 }

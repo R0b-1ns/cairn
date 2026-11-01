@@ -128,6 +128,8 @@ func TestHungGitGivesEmptyValues(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	Reset()
+	t.Cleanup(Reset)
 	old := timeout
 	timeout = 200 * time.Millisecond
 	t.Cleanup(func() { timeout = old })

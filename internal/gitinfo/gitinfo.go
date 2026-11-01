@@ -4,9 +4,11 @@ package gitinfo
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -14,9 +16,19 @@ import (
 // file system) cannot hang cairn; a call that times out gives empty values.
 var timeout = 5 * time.Second
 
+// broken is set when a git call times out: git is then taken as unusable for
+// the rest of the process, so a hung git costs one timeout, not one per call.
+var broken atomic.Bool
+
+// Reset forgets that git timed out. It exists for tests.
+func Reset() { broken.Store(false) }
+
 // run executes git with an argument list in dir and returns trimmed standard
 // output. Standard error is discarded and git never prompts.
 func run(dir string, args ...string) (string, error) {
+	if broken.Load() {
+		return "", context.DeadlineExceeded
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", args...)
@@ -26,6 +38,9 @@ func run(dir string, args ...string) (string, error) {
 	cmd.WaitDelay = time.Second
 	out, err := cmd.Output()
 	if err != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			broken.Store(true)
+		}
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
