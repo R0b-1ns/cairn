@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.3.0](https://github.com/R0b-1ns/cairn/compare/v1.2.0...v1.3.0) (2026-11-01)
+
+
+### Features
+
+* adapt task tracking (numbering modes, ticket refs, author and branch, interactive init) ([2ec6468](https://github.com/R0b-1ns/cairn/commit/2ec6468685de7cf86ed7af6f08a70328440cadfb))
+* **add:** record author and branch, assign task numbers, accept a ref ([595eb9c](https://github.com/R0b-1ns/cairn/commit/595eb9cc3892a3b9aed85f2827922db44fad56a2))
+* **gitinfo:** read the branch and the git identity ([2d62b68](https://github.com/R0b-1ns/cairn/commit/2d62b6874faf27a27912d86f87a6f423eff1e250))
+* **init:** ask the questions interactively in a terminal ([feb9b66](https://github.com/R0b-1ns/cairn/commit/feb9b66b2666f2c770505c7de82b5ee00cb64dc0))
+* **init:** choose a task numbering mode ([f1a9ab3](https://github.com/R0b-1ns/cairn/commit/f1a9ab3bb683fbe8a28bdc4c5705a933a5867005))
+* print a compact origin on brief note lines ([560bef1](https://github.com/R0b-1ns/cairn/commit/560bef1c9cd31fdf15451fbe407a03c82da5b7d8))
+* **prompt:** ask one line at a time with a default and validation ([03e71f8](https://github.com/R0b-1ns/cairn/commit/03e71f80b43fb52fd7ff02a298d7873356a6e0da))
+* show author, branch and refs; filter by them; round-trip them in export and import ([e9ca543](https://github.com/R0b-1ns/cairn/commit/e9ca54364cf44f1c984d95b8aa5833852e479595))
+* show the task mode in context and the refs in brief and show JSON ([47d2294](https://github.com/R0b-1ns/cairn/commit/47d2294a71482167f06a714b92c43e5489aa696e))
+* **store:** schema version 4 with the first migration ([1e9cfce](https://github.com/R0b-1ns/cairn/commit/1e9cfce53be4d780aff313891ca6a0a5d8bb1593))
+* **store:** store author, branch and ref; number auto tasks ([101d069](https://github.com/R0b-1ns/cairn/commit/101d0695f2cde4390503097c930adc862abd3ca9))
+* **tasks:** task modes, URL template and field validation ([2c50435](https://github.com/R0b-1ns/cairn/commit/2c50435cc14e10f226b2f00d06a926f3aa180de8))
+* **view:** branch and author columns, filters and sorting ([bcc8bfa](https://github.com/R0b-1ns/cairn/commit/bcc8bfa5eb1baeca6b0e2ae75ad1a2f6dc35d25a))
+
+
+### Bug Fixes
+
+* bound a hung git to one timeout per command, not one per git call ([a317a8f](https://github.com/R0b-1ns/cairn/commit/a317a8f669c4a8be3d203f116a66c90dd5484042))
+* cancel init on Ctrl-C, bound git calls, clearer version and env errors ([2f698f0](https://github.com/R0b-1ns/cairn/commit/2f698f06dc37fb6586ef52c7e67947b5e6185fb0))
+* escape the computed ticket link and write the origin as Name &lt;email&gt; ([d7bfaa1](https://github.com/R0b-1ns/cairn/commit/d7bfaa1d34bc3fdc0f17329700e44f5fe5a29d37))
+* **gitinfo:** read the branch of a repository with no commit yet ([d6998e2](https://github.com/R0b-1ns/cairn/commit/d6998e2d48599384861435bf218b82f45c9255f9))
+* **init:** allow --tasks custom with its pattern ([86848f7](https://github.com/R0b-1ns/cairn/commit/86848f7414bc1d831a95fe78cb41c8b31e6c811b))
+* reuse a canceled prompt read instead of starting a second reader ([bb415d6](https://github.com/R0b-1ns/cairn/commit/bb415d6616d45ee9bbd8bfc1a147a6e725f3ba62))
+* **store:** keep the migration's lock while copying the backup ([16e61bc](https://github.com/R0b-1ns/cairn/commit/16e61bc147368573f0d387c64cd1ac3cc3a7bd09))
+* **store:** refuse a task outside the pattern and exhausted numbering ([1a22e22](https://github.com/R0b-1ns/cairn/commit/1a22e224fb495acf20cb04ae4088ac0253084cc8))
+* **store:** verify the old schema before migrating it ([23d4464](https://github.com/R0b-1ns/cairn/commit/23d44647f5b6445aeda6435d7b2acaf51cb8fd22))
+
 ## [1.2.0](https://github.com/R0b-1ns/cairn/compare/v1.1.0...v1.2.0) (2026-11-01)
 
 
