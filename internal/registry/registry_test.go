@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -436,5 +437,122 @@ func TestHomeIsAbsolute(t *testing.T) {
 	})
 	if err != nil || !filepath.IsAbs(got) {
 		t.Fatalf("relative CAIRN_HOME must become absolute: %q %v", got, err)
+	}
+}
+
+func TestRegistryChildPaths(t *testing.T) {
+	base := tempBase(t)
+	home := filepath.Join(base, "home")
+	r := Open(home)
+	root := filepath.Join(base, "tidepool")
+	dir := filepath.Join(base, "web")
+	mkdirAll(t, root)
+	mkdirAll(t, dir)
+	if err := r.Register(Entry{Name: "tidepool", Mode: "project", Path: root}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.SetChild("tidepool", "web", dir); err != nil {
+		t.Fatal(err)
+	}
+	e, err := r.Get("tidepool")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.Children["web"] != evalPath(t, dir) {
+		t.Fatalf("child path = %q, want %q", e.Children["web"], evalPath(t, dir))
+	}
+	if err := r.RemoveChild("tidepool", "web"); err != nil {
+		t.Fatal(err)
+	}
+	if e, _ = r.Get("tidepool"); len(e.Children) != 0 {
+		t.Fatalf("children after remove = %v", e.Children)
+	}
+	if err := r.RemoveChild("tidepool", "web"); err != nil {
+		t.Fatalf("removing twice: %v", err)
+	}
+	if err := r.SetChild("nope", "web", dir); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("SetChild unknown parent = %v, want ErrNotFound", err)
+	}
+	if err := r.RemoveChild("nope", "web"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("RemoveChild unknown parent = %v, want ErrNotFound", err)
+	}
+}
+
+func TestRegistrySetID(t *testing.T) {
+	base := tempBase(t)
+	r := Open(filepath.Join(base, "home"))
+	root := filepath.Join(base, "tidepool")
+	mkdirAll(t, root)
+	if err := r.Register(Entry{Name: "tidepool", Mode: "project", Path: root}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.SetID("tidepool", "p-abcdefghij"); err != nil {
+		t.Fatal(err)
+	}
+	e, err := r.Get("tidepool")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.ID != "p-abcdefghij" {
+		t.Fatalf("id = %q", e.ID)
+	}
+	if err := r.SetID("nope", "p-abcdefghij"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("SetID unknown = %v, want ErrNotFound", err)
+	}
+}
+
+func TestRegistryOldFileStillLoads(t *testing.T) {
+	base := tempBase(t)
+	home := filepath.Join(base, "home")
+	root := filepath.Join(base, "tidepool")
+	mkdirAll(t, root)
+	old := fmt.Sprintf(`{"version":1,"projects":[{"name":"tidepool","mode":"project","path":%q}]}`, root)
+	writeFile(t, filepath.Join(home, registryFile), []byte(old))
+	r := Open(home)
+	e, err := r.Get("tidepool")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.ID != "" || len(e.Children) != 0 {
+		t.Fatalf("unexpected new fields: %+v", e)
+	}
+	if err := r.SetID("tidepool", "p-abcdefghij"); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(home, registryFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var f struct {
+		Version int `json:"version"`
+	}
+	if err := json.Unmarshal(b, &f); err != nil || f.Version != 1 {
+		t.Fatalf("version = %d, err %v", f.Version, err)
+	}
+}
+
+func TestRemoveProjectDropsItsChildren(t *testing.T) {
+	base := tempBase(t)
+	home := filepath.Join(base, "home")
+	r := Open(home)
+	root := filepath.Join(base, "tidepool")
+	dir := filepath.Join(base, "web")
+	mkdirAll(t, root)
+	mkdirAll(t, dir)
+	if err := r.Register(Entry{Name: "tidepool", Mode: "project", Path: root}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.SetChild("tidepool", "web", dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Remove("tidepool"); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(home, registryFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "web") || strings.Contains(string(b), "children") {
+		t.Fatalf("child traces left: %s", b)
 	}
 }
