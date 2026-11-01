@@ -163,10 +163,10 @@ type NoteHeader struct {
 	Title  string       `json:"title"`
 	Status model.Status `json:"status"`
 
-	Branch      string `json:"branch"`
-	AuthorName  string `json:"author_name"`
-	AuthorEmail string `json:"author_email"`
-	Ref         string `json:"ref"`
+	Branch      string `json:"branch,omitempty"`
+	AuthorName  string `json:"author_name,omitempty"`
+	AuthorEmail string `json:"author_email,omitempty"`
+	Ref         string `json:"ref,omitempty"`
 }
 
 // NoteHeaders returns matching notes oldest first.

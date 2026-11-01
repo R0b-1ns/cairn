@@ -203,6 +203,12 @@ func renderMarkdownNotes(s *session, doc exportDoc) (string, error) {
 			return "", err
 		}
 		fmt.Fprintf(&b, "task: %s · repo: %s · agent: %s (%s) · at: %s · status: %s\n\n", sanitize(task), sanitize(n.Repo), sanitize(n.Agent), sanitize(n.Model), sanitize(n.At), sanitize(string(cur)))
+		if o := originLine(n.AuthorName, n.AuthorEmail, n.Branch); o != "" {
+			fmt.Fprintf(&b, "%s\n\n", o)
+		}
+		if n.Ref != "" {
+			fmt.Fprintf(&b, "ref: %s\n\n", sanitize(n.Ref))
+		}
 		for _, t := range model.EntryTypes {
 			wrote := false
 			for _, e := range n.Entries {
@@ -248,6 +254,12 @@ func renderMarkdownNotes(s *session, doc exportDoc) (string, error) {
 				fmt.Fprintf(&b, " · status: %s", sanitize(string(a.Status)))
 			}
 			b.WriteString("\n\n")
+			if o := originLine(a.AuthorName, a.AuthorEmail, a.Branch); o != "" {
+				fmt.Fprintf(&b, "- %s\n", o)
+			}
+			if a.Ref != "" {
+				fmt.Fprintf(&b, "- ref: %s\n", sanitize(a.Ref))
+			}
 			for _, e := range a.Entries {
 				line, err := entry(e)
 				if err != nil {
@@ -331,6 +343,9 @@ func defineImport(fs *flag.FlagSet) Handler {
 			n := &doc.Notes[i]
 			p := fmt.Sprintf("notes[%d]", i)
 			needID(p, n.ID, n.Entries)
+			if n.NewTask {
+				prefix(p, []validate.FieldError{{Field: "new_task", Message: "is input for add only and cannot be imported"}})
+			}
 			notFuture(p, n.At)
 			prefix(p, validate.Note(*n, s.Proj, opt))
 			items = append(items, store.ImportItem{Note: n})

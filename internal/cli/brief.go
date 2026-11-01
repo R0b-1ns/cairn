@@ -3,9 +3,11 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"strings"
 
 	"github.com/R0b-1ns/cairn/internal/model"
 	"github.com/R0b-1ns/cairn/internal/store"
+	"github.com/R0b-1ns/cairn/internal/tasks"
 	"github.com/R0b-1ns/cairn/internal/validate"
 )
 
@@ -48,6 +50,9 @@ func entryLine(e store.EntryInfo) string {
 func defineBrief(fs *flag.FlagSet) Handler {
 	var f common
 	f.all(fs)
+	var branch, author string
+	fs.StringVar(&branch, "branch", "", "only notes written on this branch (the note or one of its addenda)")
+	fs.StringVar(&author, "author", "", "only notes by this author name or email (the note or one of its addenda)")
 	return func(c *Ctx, args []string) int {
 		if len(args) != 1 {
 			return fail(c, ExitUsage, "usage: cairn brief <task-id>")
@@ -64,12 +69,13 @@ func defineBrief(fs *flag.FlagSet) Handler {
 		if !ok {
 			return fail(c, ExitUsage, "%q does not match the task pattern %s", args[0], s.Proj.TaskPattern)
 		}
-		headers, err := s.St.NoteHeaders(store.NoteFilter{TaskBase: flt.TaskBase, Task: flt.Task})
+		headers, err := s.St.NoteHeaders(store.NoteFilter{TaskBase: flt.TaskBase, Task: flt.Task, Branch: branch, Author: author})
 		if err != nil {
 			return fail(c, ExitRuntime, "%v", err)
 		}
 		query := func(t model.EntryType, st store.StateFilter) ([]store.EntryInfo, error) {
 			q := flt
+			q.Branch, q.Author = branch, author
 			q.Types, q.State = []model.EntryType{t}, st
 			items, _, err := s.St.ListEntries(q)
 			for i, j := 0, len(items)-1; i < j; i, j = i+1, j-1 { // oldest first reads best
@@ -98,6 +104,17 @@ func defineBrief(fs *flag.FlagSet) Handler {
 			return ExitOK
 		}
 		fmt.Fprintf(c.Stdout, "%s: %d note(s)\n", args[0], len(headers))
+		refs, err := briefRefs(s, args[0], flt)
+		if err != nil {
+			return fail(c, ExitRuntime, "%v", err)
+		}
+		if len(refs) > 0 {
+			var clean []string
+			for _, r := range refs {
+				clean = append(clean, sanitize(r))
+			}
+			fmt.Fprintf(c.Stdout, "refs: %s\n", strings.Join(clean, ", "))
+		}
 		fmt.Fprintln(c.Stdout, "notes:")
 		var lines []string
 		for _, h := range headers {
@@ -105,8 +122,12 @@ func defineBrief(fs *flag.FlagSet) Handler {
 			if task == "" {
 				task = "-"
 			}
-			lines = append(lines, fmt.Sprintf("  %s  %-8s %-11s %s  %s (%s, %s)", h.ID, task, h.Status, day(h.At),
-				clip(sanitize(h.Title), textWidth), sanitize(h.Repo), sanitize(h.Agent)))
+			line := fmt.Sprintf("  %s  %-8s %-11s %s  %s (%s, %s)", h.ID, task, h.Status, day(h.At),
+				clip(sanitize(h.Title), textWidth), sanitize(h.Repo), sanitize(h.Agent))
+			if o := shortOrigin(h.AuthorName, h.AuthorEmail, h.Branch); o != "" {
+				line += " " + o
+			}
+			lines = append(lines, line)
 		}
 		printSection(c, lines, f.max)
 		for _, sec := range []struct {
@@ -122,6 +143,23 @@ func defineBrief(fs *flag.FlagSet) Handler {
 		}
 		return ExitOK
 	}
+}
+
+// briefRefs is every ref stored for the task (newest first), or the project's
+// link for the task when none is stored.
+func briefRefs(s *session, task string, flt store.Filter) ([]string, error) {
+	base := flt.TaskBase
+	if base == "" {
+		base, _, _ = validate.TaskParts(s.Proj, task)
+	}
+	refs, err := s.St.TaskRefs(base)
+	if err != nil || len(refs) > 0 {
+		return refs, err
+	}
+	if u := tasks.URL(s.Proj.TaskURL, task); u != "" {
+		return []string{u}, nil
+	}
+	return nil, nil
 }
 
 func nonNil[T any](v []T) []T {
