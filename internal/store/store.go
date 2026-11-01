@@ -74,13 +74,8 @@ func (s *Store) init(p model.Project) error {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.Exec(tableSQL); err != nil {
+	if err := buildSchema(tx); err != nil {
 		return err
-	}
-	for _, stmt := range triggerSQL() {
-		if _, err := tx.Exec(stmt); err != nil {
-			return err
-		}
 	}
 	repos, _ := json.Marshal(p.Repos)
 	if _, err := tx.Exec(`INSERT INTO project(id,name,mode,context,repos,default_repo,task_pattern) VALUES (1,?,?,?,?,?,?)`,
@@ -109,6 +104,10 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	s := &Store{db: db, path: path}
+	if err := s.migrate(); err != nil {
+		db.Close()
+		return nil, err
+	}
 	if err := s.verify(); err != nil {
 		db.Close()
 		return nil, err
@@ -189,13 +188,8 @@ func expectedSchema() (map[string]string, error) {
 	}
 	defer db.Close()
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(tableSQL); err != nil {
+	if err := buildSchema(db); err != nil {
 		return nil, err
-	}
-	for _, stmt := range triggerSQL() {
-		if _, err := db.Exec(stmt); err != nil {
-			return nil, err
-		}
 	}
 	return schemaObjects(db)
 }

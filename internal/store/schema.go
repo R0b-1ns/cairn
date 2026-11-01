@@ -6,12 +6,15 @@ import (
 )
 
 // SchemaVersion is stored in PRAGMA user_version.
-const SchemaVersion = 3
+const SchemaVersion = 4
 
 // contentTables are the tables protected by immutability triggers.
 var contentTables = []string{"project", "notes", "entries", "addenda", "links"}
 
-const tableSQL = `
+// tableSQLv3 is the version 3 baseline. Every later schema change is a migration
+// (see migrate.go); a fresh database is this baseline plus all of them, so a
+// fresh schema and a migrated one are identical.
+const tableSQLv3 = `
 CREATE TABLE project (
 	id INTEGER PRIMARY KEY CHECK (id = 1),
 	name TEXT NOT NULL,

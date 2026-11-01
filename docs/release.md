@@ -16,6 +16,8 @@ A change that does not build or pass its tests cannot be merged when the `ci` ch
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/): `feat:` bumps the minor version, `fix:` the patch version, `feat!:` or a `BREAKING CHANGE:` footer the major version (while the version is below 1.0.0, breaking changes bump the minor version). Tags look like `v0.2.0`.
 
+A release that raises the database schema version (version 4 and later) migrates older databases on open. Older binaries refuse a database at a newer version (`unsupported database version`), so a project shared through its repository moves to the new version for everyone at once. The migration leaves a `.v3.bak` copy beside the database.
+
 ## Binaries
 
 | File | Platform |

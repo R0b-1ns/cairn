@@ -50,6 +50,12 @@ type Note struct {
 	Commits    []string    `json:"commits,omitempty"`
 	Resolves   []string    `json:"resolves,omitempty"`   // IDs of open entries closed by this note
 	Supersedes []string    `json:"supersedes,omitempty"` // IDs of decision entries replaced by this note
+
+	AuthorName  string `json:"author_name,omitempty"`
+	AuthorEmail string `json:"author_email,omitempty"`
+	Branch      string `json:"branch,omitempty"`
+	Ref         string `json:"ref,omitempty"`
+	NewTask     bool   `json:"new_task,omitempty"` // input only: allocate the next task number; never stored
 }
 
 // Addendum is an immutable addition to a note.
@@ -63,6 +69,11 @@ type Addendum struct {
 	Entries    []Entry  `json:"entries,omitempty"`
 	Resolves   []string `json:"resolves,omitempty"`
 	Supersedes []string `json:"supersedes,omitempty"`
+
+	AuthorName  string `json:"author_name,omitempty"`
+	AuthorEmail string `json:"author_email,omitempty"`
+	Branch      string `json:"branch,omitempty"`
+	Ref         string `json:"ref,omitempty"`
 }
 
 // Project is the configuration stored with the data.
@@ -73,6 +84,9 @@ type Project struct {
 	Repos       []string `json:"repos"`
 	DefaultRepo string   `json:"default_repo"` // repo used by add when --repo is omitted; "" = none
 	TaskPattern string   `json:"task_pattern"`
+	TaskMode    string   `json:"task_mode,omitempty"`
+	TaskPrefix  string   `json:"task_prefix,omitempty"`
+	TaskURL     string   `json:"task_url,omitempty"`
 }
 
 // Modes of storage.

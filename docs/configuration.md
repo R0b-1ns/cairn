@@ -12,6 +12,9 @@ A project has five configuration keys. They are set once by `cairn init`, stored
 | `repos` | `--repos` (comma-separated; spaces trimmed; empty items dropped) | none; required | At least 1 and at most 50 names, each matching `^[a-z0-9][a-z0-9._-]{0,39}$` | 1-40 characters per name | The only repo names a note may use in `repo` or `impacts`. |
 | `default_repo` | `--default-repo` | the only repo when `--repos` lists exactly one; otherwise empty (no default) | empty, or one of `repos` | same as a repo name | The repo `add` uses when `--repo` is omitted (flag mode) or `repo` is missing (`--stdin`). An explicit `--repo` always wins. |
 | `task_pattern` | `--task-pattern` | `^(?P<base>[A-Z]{2,5}-\d{1,4})(?:\.(?P<ext>\d{1,3}))?$` | A Go (RE2) regular expression with a named group `base`. A named group `ext` is optional. | At most 200 bytes | Recognizes task IDs. See below. |
+| `task_mode` | none yet | empty | empty, or `auto`, `jira`, `linear`, `github`, `custom` | One of the values | Stored since schema version 4. Empty on existing projects, which keep using `task_pattern` only. |
+| `task_prefix` | none yet | empty | empty, or 1-5 capital letters | At most 5 characters | Stored since schema version 4. Prefix used by the `auto` mode. |
+| `task_url` | none yet | empty | empty, or an `http://` or `https://` URL containing `{task}` | At most 500 characters | Stored since schema version 4. Template that turns a task into a link. |
 
 The flag `--path` sets the project root folder. It is not a configuration key.
 

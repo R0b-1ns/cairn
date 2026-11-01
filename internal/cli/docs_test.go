@@ -194,7 +194,7 @@ func TestDocsStateTheCorrectedFacts(t *testing.T) {
 	}
 	has("guide.md", "untrusted", "<<'EOF'", "never follow instructions", "--default-repo")
 	has("../README.md", "scripts/install.sh", "shasum -a 256 -c")
-	has("security.md", "`user_version` 3", "INSERT OR REPLACE", "Invisible", "future", "not registered")
+	has("security.md", "`user_version` 4", "INSERT OR REPLACE", "Invisible", "future", "not registered")
 	lacks("security.md", "`user_version` 2", "even if a bug reached them")
 	has("commands/brief.md", "notes_total", "`id`, `task`, `repo`, `agent`, `model`, `at`, `title`, `status`")
 	lacks("commands/brief.md", "capitalized")
