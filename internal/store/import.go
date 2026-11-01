@@ -27,6 +27,7 @@ func canon(v any) string {
 }
 
 func normNote(n model.Note) model.Note {
+	n.NewTask = false
 	n.At, _ = normAt(n.At)
 	if len(n.None) == 0 {
 		n.None = nil

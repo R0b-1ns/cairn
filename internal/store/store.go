@@ -78,8 +78,8 @@ func (s *Store) init(p model.Project) error {
 		return err
 	}
 	repos, _ := json.Marshal(p.Repos)
-	if _, err := tx.Exec(`INSERT INTO project(id,name,mode,context,repos,default_repo,task_pattern) VALUES (1,?,?,?,?,?,?)`,
-		p.Name, p.Mode, p.Context, string(repos), p.DefaultRepo, p.TaskPattern); err != nil {
+	if _, err := tx.Exec(`INSERT INTO project(id,name,mode,context,repos,default_repo,task_pattern,task_mode,task_prefix,task_url) VALUES (1,?,?,?,?,?,?,?,?,?)`,
+		p.Name, p.Mode, p.Context, string(repos), p.DefaultRepo, p.TaskPattern, p.TaskMode, p.TaskPrefix, p.TaskURL); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
@@ -237,8 +237,8 @@ func (s *Store) Path() string { return s.path }
 func (s *Store) Project() (model.Project, error) {
 	var p model.Project
 	var repos string
-	err := s.db.QueryRow(`SELECT name,mode,context,repos,default_repo,task_pattern FROM project WHERE id=1`).
-		Scan(&p.Name, &p.Mode, &p.Context, &repos, &p.DefaultRepo, &p.TaskPattern)
+	err := s.db.QueryRow(`SELECT name,mode,context,repos,default_repo,task_pattern,task_mode,task_prefix,task_url FROM project WHERE id=1`).
+		Scan(&p.Name, &p.Mode, &p.Context, &repos, &p.DefaultRepo, &p.TaskPattern, &p.TaskMode, &p.TaskPrefix, &p.TaskURL)
 	if err != nil {
 		return p, err
 	}
@@ -389,6 +389,12 @@ func (s *Store) InsertNote(n model.Note) (model.Note, error) {
 
 func insertNoteTx(tx *sql.Tx, p model.Project, n model.Note) (model.Note, error) {
 	var err error
+	if n.NewTask {
+		if n.Task, err = nextTask(tx, p); err != nil {
+			return n, err
+		}
+		n.NewTask = false
+	}
 	base, ext, _ := validate.TaskParts(p, n.Task)
 	if n.At, err = normAt(n.At); err != nil {
 		return n, err
@@ -396,9 +402,9 @@ func insertNoteTx(tx *sql.Tx, p model.Project, n model.Note) (model.Note, error)
 	if n.ID, err = assignID(tx, 'n', n.ID); err != nil {
 		return n, err
 	}
-	if _, err = tx.Exec(`INSERT INTO notes(id,agent,repo,at,task,task_base,task_ext,model,title,status,none,impacts,commits) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	if _, err = tx.Exec(`INSERT INTO notes(id,agent,repo,at,task,task_base,task_ext,model,title,status,none,impacts,commits,author_name,author_email,branch,ref) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		n.ID, n.Agent, n.Repo, n.At, n.Task, base, ext, n.Model, n.Title, string(n.Status),
-		jsonList(n.None), jsonList(n.Impacts), jsonList(n.Commits)); err != nil {
+		jsonList(n.None), jsonList(n.Impacts), jsonList(n.Commits), n.AuthorName, n.AuthorEmail, n.Branch, n.Ref); err != nil {
 		return n, err
 	}
 	if _, err = tx.Exec(`INSERT INTO search(text,kind,id,note_id) VALUES (?,?,?,?)`, n.Title, "note", n.ID, n.ID); err != nil {
@@ -440,8 +446,8 @@ func insertAddendumTx(tx *sql.Tx, a model.Addendum) (model.Addendum, error) {
 		return a, err
 	}
 	st := sql.NullString{String: string(a.Status), Valid: a.Status != ""}
-	if _, err = tx.Exec(`INSERT INTO addenda(id,note_id,agent,model,at,status) VALUES (?,?,?,?,?,?)`,
-		a.ID, a.NoteID, a.Agent, a.Model, a.At, st); err != nil {
+	if _, err = tx.Exec(`INSERT INTO addenda(id,note_id,agent,model,at,status,author_name,author_email,branch,ref) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		a.ID, a.NoteID, a.Agent, a.Model, a.At, st, a.AuthorName, a.AuthorEmail, a.Branch, a.Ref); err != nil {
 		return a, err
 	}
 	if a.Entries, err = insertEntries(tx, "", a.ID, a.Entries); err != nil {
@@ -496,8 +502,8 @@ func loadLinks(db *sql.DB, col, id string) (resolves, supersedes []string, err e
 func (s *Store) GetNote(id string) (model.Note, error) {
 	var n model.Note
 	var st, none, impacts, commits string
-	err := s.db.QueryRow(`SELECT id,agent,repo,at,task,model,title,status,none,impacts,commits FROM notes WHERE id=?`, id).
-		Scan(&n.ID, &n.Agent, &n.Repo, &n.At, &n.Task, &n.Model, &n.Title, &st, &none, &impacts, &commits)
+	err := s.db.QueryRow(`SELECT id,agent,repo,at,task,model,title,status,none,impacts,commits,author_name,author_email,branch,ref FROM notes WHERE id=?`, id).
+		Scan(&n.ID, &n.Agent, &n.Repo, &n.At, &n.Task, &n.Model, &n.Title, &st, &none, &impacts, &commits, &n.AuthorName, &n.AuthorEmail, &n.Branch, &n.Ref)
 	if errors.Is(err, sql.ErrNoRows) {
 		return n, fmt.Errorf("%w: %s", ErrNotFound, id)
 	}
@@ -530,8 +536,8 @@ func (s *Store) GetNote(id string) (model.Note, error) {
 func (s *Store) GetAddendum(id string) (model.Addendum, error) {
 	var a model.Addendum
 	var st sql.NullString
-	err := s.db.QueryRow(`SELECT id,note_id,agent,model,at,status FROM addenda WHERE id=?`, id).
-		Scan(&a.ID, &a.NoteID, &a.Agent, &a.Model, &a.At, &st)
+	err := s.db.QueryRow(`SELECT id,note_id,agent,model,at,status,author_name,author_email,branch,ref FROM addenda WHERE id=?`, id).
+		Scan(&a.ID, &a.NoteID, &a.Agent, &a.Model, &a.At, &st, &a.AuthorName, &a.AuthorEmail, &a.Branch, &a.Ref)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, fmt.Errorf("%w: %s", ErrNotFound, id)
 	}
