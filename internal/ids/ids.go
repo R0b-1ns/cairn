@@ -46,3 +46,21 @@ func Kind(s string) byte {
 	}
 	return s[0]
 }
+
+// projectLen is the number of random characters in a project ID.
+const projectLen = 10
+
+// NewProject returns a new random project ID, for example "p-4k7q2m9x3b". It
+// uses the same alphabet as New. Kind and Valid do not know project IDs.
+func NewProject() string {
+	var raw [projectLen]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		panic("cairn: no randomness available: " + err.Error())
+	}
+	b := make([]byte, 0, projectLen+2)
+	b = append(b, 'p', '-')
+	for _, r := range raw {
+		b = append(b, alphabet[int(r)&31])
+	}
+	return string(b)
+}

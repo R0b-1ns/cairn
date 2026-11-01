@@ -310,7 +310,7 @@ func Project(p model.Project) []FieldError {
 		c.addf("repos", "too many repos (max %d)", MaxRepos)
 	}
 	for _, r := range p.Repos {
-		if !repoRe.MatchString(r) {
+		if !ValidRepo(r) {
 			c.addf("repos", "%s must match %s", quote(r), repoRe)
 		}
 	}
@@ -390,3 +390,6 @@ func quote(v string) string {
 	}
 	return strconv.Quote(v)
 }
+
+// ValidRepo reports whether s is a well-formed repo name.
+func ValidRepo(s string) bool { return repoRe.MatchString(s) }

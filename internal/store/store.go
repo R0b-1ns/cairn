@@ -158,7 +158,7 @@ func verifyShape(q querier, v int) error {
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	for name, want := range triggerSQL() {
+	for name, want := range triggerSQLFor(v) {
 		got, ok := have[name]
 		if !ok {
 			return fmt.Errorf("immutability trigger %s is missing: database refused", name)
@@ -251,8 +251,15 @@ func (s *Store) Project() (model.Project, error) {
 	if err != nil {
 		return p, err
 	}
-	err = json.Unmarshal([]byte(repos), &p.Repos)
-	return p, err
+	if err = json.Unmarshal([]byte(repos), &p.Repos); err != nil {
+		return p, err
+	}
+	extra, err := s.addedRepos(s.db)
+	if err != nil {
+		return p, err
+	}
+	p.Repos = mergeRepos(p.Repos, extra)
+	return p, nil
 }
 
 type execer interface {

@@ -6,10 +6,15 @@ import (
 )
 
 // SchemaVersion is stored in PRAGMA user_version.
-const SchemaVersion = 4
+const SchemaVersion = 5
 
-// contentTables are the tables protected by immutability triggers.
+// contentTables are the baseline (version 3) tables protected by immutability
+// triggers. Tables added by a migration carry their own triggers (see
+// linkEventTables).
 var contentTables = []string{"project", "notes", "entries", "addenda", "links"}
+
+// linkEventTables are the tables added in version 5, protected the same way.
+var linkEventTables = []string{"link_events"}
 
 // tableSQLv3 is the version 3 baseline. Every later schema change is a migration
 // (see migrate.go); a fresh database is this baseline plus all of them, so a
@@ -82,12 +87,30 @@ var replaceGuards = map[string]string{
 	"entries": "id = NEW.id",
 	"addenda": "id = NEW.id",
 	"links":   "seq = NEW.seq OR (target_entry_id = NEW.target_entry_id AND kind = NEW.kind)",
+
+	"link_events": "seq = NEW.seq",
 }
 
-// triggerSQL returns the name -> CREATE TRIGGER statement for every immutability trigger.
-func triggerSQL() map[string]string {
+// triggerSQL returns the name -> CREATE TRIGGER statement for every baseline
+// (version 3) immutability trigger.
+func triggerSQL() map[string]string { return triggersFor(contentTables) }
+
+// triggerSQLFor returns the triggers a database of the given schema version has.
+func triggerSQLFor(version int) map[string]string {
+	out := triggerSQL()
+	if version >= 5 {
+		for k, v := range triggersFor(linkEventTables) {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+// triggersFor generates the name -> CREATE TRIGGER statement of the immutability
+// triggers of the given tables.
+func triggersFor(tables []string) map[string]string {
 	out := map[string]string{}
-	for _, t := range contentTables {
+	for _, t := range tables {
 		for _, op := range []string{"update", "delete"} {
 			name := t + "_no_" + op
 			out[name] = "CREATE TRIGGER " + name + " BEFORE " + strings.ToUpper(op) + " ON " + t +
