@@ -543,7 +543,7 @@ func buildNote(nv NoteView, owner map[string]string, proj model.Project) noteCon
 	refs := append([]string{n.Ref}, nv.TaskRefs...)
 	if len(distinct(refs)) == 0 && n.Task != "" {
 		// no ref stored for the task: offer the one the project's URL template builds
-		refs = append(refs, tasks.URL(proj.TaskURL, n.Task))
+		refs = append(refs, tasks.URL(proj.TaskURL, taskBase(proj, n.Task)))
 	}
 	c.Refs = refViews(refs...)
 	none := map[model.EntryType]bool{}

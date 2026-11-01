@@ -52,14 +52,18 @@ func TestNextAndFormat(t *testing.T) {
 }
 
 func TestURL(t *testing.T) {
-	if got := tasks.URL("https://x/browse/{task}", "PROJ-12.1"); got != "https://x/browse/PROJ-12" {
-		t.Errorf("got %q", got)
-	}
-	if got := tasks.URL("https://g/issues/{task}", "#128"); got != "https://g/issues/128" {
-		t.Errorf("got %q", got)
-	}
-	if got := tasks.URL("", "T-1"); got != "" {
-		t.Errorf("got %q", got)
+	for _, c := range []struct{ tmpl, base, want string }{
+		{"https://x/browse/{task}", "PROJ-12", "https://x/browse/PROJ-12"},
+		{"https://g/issues/{task}", "#128", "https://g/issues/128"},
+		// the base is used as given: a dot in a custom base is kept
+		{"https://x/r/{task}", "REL-1.2", "https://x/r/REL-1.2"},
+		// the value is escaped as one path segment
+		{"https://x/t/{task}", "A B/c?d#e", "https://x/t/A%20B%2Fc%3Fd%23e"},
+		{"", "T-1", ""},
+	} {
+		if got := tasks.URL(c.tmpl, c.base); got != c.want {
+			t.Errorf("URL(%q, %q) = %q, want %q", c.tmpl, c.base, got, c.want)
+		}
 	}
 }
 

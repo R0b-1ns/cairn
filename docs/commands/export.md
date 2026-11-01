@@ -35,7 +35,7 @@ Tide data service. Sensor ingest, the tidal index and the browser client.
 
 task: TP-03 · repo: server · agent: builder (claude-opus-5-5) · at: 2026-10-30T09:12:44Z · status: done
 
-by Ada ada@example.org on feat/tidal-index
+by Ada <ada@example.org> on feat/tidal-index
 
 ref: https://tracker.example.org/browse/TP-03
 
@@ -55,7 +55,7 @@ none: note, helper
 
 #### addendum a-9x3b2c · builder (claude-opus-5-5) · 2026-10-31T08:02:10Z · status: done
 
-- by Bob bob@example.org on fix/prune
+- by Bob <bob@example.org> on fix/prune
 - ref: https://tracker.example.org/browse/TP-03-prune
 - `e-8k3m5p` Pruning was added in the nightly job.
 - resolves: e-5c8r0t

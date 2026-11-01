@@ -36,7 +36,7 @@ For a note:
 n-4k7q2m  Add tidal index
 task: TP-03   repo: server   agent: builder   model: claude-opus-5-5   at: 2026-10-30T10:00:00Z
 status: done
-by Ada ada@example.org on feat/tidal-index
+by Ada <ada@example.org> on feat/tidal-index
 ref: https://tracker.example.org/browse/TP-03
 impacts: client
 commits: 3f9c2ab
@@ -49,7 +49,7 @@ none: note, helper
 
 - Line 1: note ID, two spaces, full title.
 - `task` shows `-` when empty. `status` shows `status: <current>`. If the current status differs from the note's own, it adds `(set when written: <own>)`.
-- `by <name> <email> on <branch>` follows the status line; parts that are empty are left out and the whole line is omitted when all are empty. Each addendum prints the same line, indented two spaces, under its header line.
+- `by Name <email> on branch` follows the status line, the email in angle brackets; parts that are empty are left out (`by Name on branch`, `by <email>`, `on branch`) and the whole line is omitted when all are empty. Each addendum prints the same line, indented two spaces, under its header line.
 - `ref: <url>` lines follow: the note's own ref first, then the other refs of the same task, newest first, each once. With no stored ref and a project ticket URL, one line holds the link computed from the task.
 - `impacts`, `commits`, `none` and `resolves`/`supersedes` lines appear only when they have values.
 - Each entry: two spaces, ID, two spaces, type padded to 8, a space, `[user]` or `[agent]` for decisions, the text. A closed entry ends with `  (resolved by <id>)` or `  (superseded by <id>)`.
@@ -87,7 +87,7 @@ With no matches: `no entries`. If more match than `--max` allows: `... 12 more (
 TP-03: 2 note(s)
 refs: https://tracker.example.org/browse/TP-03
 notes:
-  n-4k7q2m  TP-03    done        2026-10-30  Add tidal index (server, builder) by Ada on feat/tidal-index
+  n-4k7q2m  TP-03    done        2026-10-30  Add tidal index (server, builder) by Ada <ada@example.org> on feat/tidal-index
   n-8c2e6t  TP-03.1  in_progress 2026-10-31  Tidal index follow-up (client, builder)
 changes:
   e-7h2m9q  Added the hourly tidal index table.  (n-4k7q2m)
@@ -97,7 +97,7 @@ open points:
   e-5w4n8p  Should old buckets be pruned after 90 days?  (n-4k7q2m)
 ```
 
-- The header is `<task>: <count> note(s)`. Notes are listed oldest first: ID, task, status (padded to 11), date, title, then `(repo, agent)`, then ` by <name> on <branch>` when the note has an author name (its email when no name) or a branch.
+- The header is `<task>: <count> note(s)`. Notes are listed oldest first: ID, task, status (padded to 11), date, title, then `(repo, agent)`, then the origin ` by Name <email> on branch` when the note has an author or a branch, with the empty parts left out, as in `show`.
 - `refs: <url>, <url>` comes right after the header: all refs of the task, newest first, or the link computed from the project's ticket URL when none is stored; the line is omitted when there is neither.
 - Then three sections: `changes:`, `decisions in force:`, `open points:`. Entries are listed oldest first. Each shows ID, text, and the note (`(<n-id>)`, or `(<n-id> via <a-id>)`).
 - An empty section prints `  none`.
@@ -158,7 +158,7 @@ The blank line and context appear only when the project has a context. A `defaul
 
 ### export (markdown)
 
-`cairn export` with the default `--format md` writes a readable document, not an import file. It has a `# <project>` heading, the context, then for each note a `## <n-id>  <title>` heading, a metadata line `task: ... · repo: ... · agent: ... (<model>) · at: ... · status: ...`, one `### <type>` section per type, with each entry as a list item that starts with its ID in backticks, then `none:`, `impacts:`, `commits:` lines, and addenda as `#### addendum ...` blocks. A note shows `by <name> <email> on <branch>` and `ref: <url>` lines after the metadata line, an addendum shows `- by ...` and `- ref: ...` items under its heading; each only when set. Use `--format json` to make an import file (see `note-json.md`).
+`cairn export` with the default `--format md` writes a readable document, not an import file. It has a `# <project>` heading, the context, then for each note a `## <n-id>  <title>` heading, a metadata line `task: ... · repo: ... · agent: ... (<model>) · at: ... · status: ...`, one `### <type>` section per type, with each entry as a list item that starts with its ID in backticks, then `none:`, `impacts:`, `commits:` lines, and addenda as `#### addendum ...` blocks. A note shows `by Name <email> on branch` (empty parts left out, as in `show`) and `ref: <url>` lines after the metadata line, an addendum shows `- by ...` and `- ref: ...` items under its heading; each only when set. Use `--format json` to make an import file (see `note-json.md`).
 
 ## --json
 

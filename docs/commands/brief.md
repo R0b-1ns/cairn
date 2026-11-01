@@ -32,7 +32,7 @@ Text, for a task with notes:
 TP-03: 2 note(s)
 refs: https://tracker.example.org/browse/TP-03
 notes:
-  n-4k7q2m  TP-03    done        2026-10-30  Add tidal index (server, builder) by Ada on feat/tidal-index
+  n-4k7q2m  TP-03    done        2026-10-30  Add tidal index (server, builder) by Ada <ada@example.org> on feat/tidal-index
   n-9x2c7d  TP-03.1  in_progress 2026-10-31  Split the sensor feed (client, builder)
 changes:
   e-3w9k1d  Added the hourly tidal index table.  (n-4k7q2m)
@@ -43,7 +43,7 @@ open points:
   e-5c8r0t  Should old buckets be pruned after 90 days?  (n-4k7q2m)
 ```
 
-The `refs:` line lists every `ref` stored on the notes and addenda of the task and its extensions, newest first, separated by `, `. When none is stored and the project has a ticket URL (set at `init` with `--task-url`), it shows the link computed from the task instead. With neither, the line is not printed. A note line ends with ` by <name> on <branch>` when the note has an author name (its email when there is no name) or a branch; the part that is empty is left out, and a note with neither adds nothing.
+The `refs:` line lists every `ref` stored on the notes and addenda of the task and its extensions, newest first, separated by `, `. When none is stored and the project has a ticket URL (set at `init` with `--task-url`), it shows the link computed from the task instead. With neither, the line is not printed. A note line ends with the origin ` by Name <email> on branch` when the note has an author or a branch, the same as the origin line of `show`: the email in angle brackets, empty parts left out (` by Ada on main`, ` by <ada@example.org>`), and a note with neither adds nothing.
 
 Sections are in this order: `notes` (oldest first), `changes` (oldest first), `decisions in force`, `open points`. An empty section prints `  none`. A change or open point taken from an addendum shows `(n-4k7q2m via a-9x3b2c)`. A task without notes prints `no notes for task TP-09`.
 

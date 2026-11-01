@@ -29,7 +29,7 @@ A note (`n-...`):
 n-4k7q2m  Add tidal index
 task: TP-03   repo: server   agent: builder   model: claude-opus-5-5   at: 2026-10-30T09:12:44Z
 status: done
-by Ada ada@example.org on feat/tidal-index
+by Ada <ada@example.org> on feat/tidal-index
 ref: https://tracker.example.org/browse/TP-03
 entries:
   e-3w9k1d  change   Added the hourly tidal index table.
@@ -38,14 +38,14 @@ entries:
 none: note, helper
 
 addendum a-9x3b2c  2026-10-31T08:02:10Z  builder (claude-opus-5-5)  status: done
-  by Bob bob@example.org on fix/prune
+  by Bob <bob@example.org> on fix/prune
   e-8k3m5p  note     Pruning was added in the nightly job.
   resolves: e-5c8r0t
 ```
 
 The `status:` line gains `(set when written: in_progress)` when the current status differs from the one written with the note. A note without task shows `task: -`. `impacts:` and `commits:` lines appear when set.
 
-After the `status:` line, a note prints an origin line, `by <name> <email> on <branch>`. A part that is empty is left out (`by Ada on main`, `on main`); with no author and no branch the line is not printed. Each addendum prints the same line, indented two spaces, under its header line. Then come the `ref:` lines, one per link: the note's own `ref` first, then every other `ref` carried by a note or addendum of the same task, newest first, each once (for a note without task, the `ref` of its addenda, newest first). When no `ref` is stored anywhere and the note has a task and the project has a ticket URL (set at `init` with `--task-url`), one line `ref: <link>` shows the link computed from the task; a stored `ref` always wins over the computed link.
+After the `status:` line, a note prints an origin line, `by Name <email> on branch`, the email in angle brackets. A part that is empty is left out (`by Ada on main`, `by <ada@example.org>`, `on main`); with no author and no branch the line is not printed. Each addendum prints the same line, indented two spaces, under its header line. Then come the `ref:` lines, one per link: the note's own `ref` first, then every other `ref` carried by a note or addendum of the same task, newest first, each once (for a note without task, the `ref` of its addenda, newest first). When no `ref` is stored anywhere and the note has a task and the project has a ticket URL (set at `init` with `--task-url`), one line `ref: <link>` shows the link computed from the task; a stored `ref` always wins over the computed link.
 
 An addendum (`a-...`) prints `a-9x3b2c  addendum to note n-4k7q2m`, then its agent, model and time, its status, its origin line, a `ref: <url>` line when it carries one, and its entries.
 

@@ -31,7 +31,7 @@ func TestShowCardHasAuthorBranchRef(t *testing.T) {
 	setClock(t, "2026-10-31T10:00:00Z")
 	amendNote(t, e, id, "--author", "Bob <bob@x.org>", "--branch", "fix/x", "--ref", issue2)
 	out := e.mustRun("show", id).out
-	for _, want := range []string{"by Ada ada@x.org on main\n", "ref: " + issue1 + "\n", "ref: " + issue2 + "\n", "  by Bob bob@x.org on fix/x\n"} {
+	for _, want := range []string{"by Ada <ada@x.org> on main\n", "ref: " + issue1 + "\n", "ref: " + issue2 + "\n", "  by Bob <bob@x.org> on fix/x\n"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("show missing %q:\n%s", want, out)
 		}
@@ -49,7 +49,7 @@ func TestShowCardHasAuthorBranchRef(t *testing.T) {
 			aid = strings.Fields(l)[1]
 		}
 	}
-	if o := e.mustRun("show", aid).out; !strings.Contains(o, "by Bob bob@x.org on fix/x") || !strings.Contains(o, "ref: "+issue2) {
+	if o := e.mustRun("show", aid).out; !strings.Contains(o, "by Bob <bob@x.org> on fix/x") || !strings.Contains(o, "ref: "+issue2) {
 		t.Errorf("show addendum:\n%s", o)
 	}
 }
@@ -90,7 +90,7 @@ func TestBriefShowsAllRefsNewestFirst(t *testing.T) {
 	if !strings.Contains(out, want) {
 		t.Errorf("want %q in:\n%s", want, out)
 	}
-	if !strings.Contains(out, "(server, builder) by Ada on main\n") {
+	if !strings.Contains(out, "(server, builder) by Ada <ada@x.org> on main\n") {
 		t.Errorf("note line lacks origin:\n%s", out)
 	}
 }
@@ -173,7 +173,7 @@ func TestExportMarkdownShowsOriginAndRefs(t *testing.T) {
 	setClock(t, "2026-10-31T10:00:00Z")
 	amendNote(t, e, id, "--author", "Bob", "--branch", "fix/x", "--ref", issue2)
 	out := e.mustRun("export").out
-	for _, want := range []string{"by Ada ada@x.org on main\n", "ref: " + issue1 + "\n", "- by Bob on fix/x\n", "- ref: " + issue2 + "\n"} {
+	for _, want := range []string{"by Ada <ada@x.org> on main\n", "ref: " + issue1 + "\n", "- by Bob on fix/x\n", "- ref: " + issue2 + "\n"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("markdown missing %q:\n%s", want, out)
 		}
@@ -272,5 +272,43 @@ func TestJSONRefs(t *testing.T) {
 	}
 	if _, ok := jsonRefs(t, e2.mustRun("show", c, "--json").out); ok {
 		t.Error("show: refs must be omitted when empty")
+	}
+}
+
+func TestComputedLinkUsesPatternBase(t *testing.T) {
+	e := newEnv(t)
+	e.initProject("--task-pattern", `^(?P<base>REL-\d+\.\d+)(?:-(?P<ext>\d+))?$`, "--task-url", "https://x.example/r/{task}")
+	setClock(t, "2026-10-30T10:00:00Z")
+	id := originNote(t, e, "REL-1.2-3")
+	want := "https://x.example/r/REL-1.2"
+	if o := e.mustRun("show", id).out; !strings.Contains(o, "ref: "+want+"\n") {
+		t.Errorf("show:\n%s", o)
+	}
+	if o := e.mustRun("brief", "REL-1.2").out; !strings.Contains(o, "refs: "+want+"\n") {
+		t.Errorf("brief:\n%s", o)
+	}
+}
+
+func TestOriginLineFormat(t *testing.T) {
+	for _, c := range []struct{ name, email, branch, want string }{
+		{"Ada", "ada@x.org", "main", "by Ada <ada@x.org> on main"},
+		{"Ada", "", "main", "by Ada on main"},
+		{"", "ada@x.org", "", "by <ada@x.org>"},
+		{"", "", "main", "on main"},
+		{"", "", "", ""},
+	} {
+		if got := originLine(c.name, c.email, c.branch); got != c.want {
+			t.Errorf("originLine(%q, %q, %q) = %q, want %q", c.name, c.email, c.branch, got, c.want)
+		}
+	}
+}
+
+func TestBriefOriginWithEmailOnly(t *testing.T) {
+	e := newEnv(t)
+	e.initProject()
+	setClock(t, "2026-10-30T10:00:00Z")
+	originNote(t, e, "TP-03", "--author", "<ada@x.org>", "--branch", "main")
+	if out := e.mustRun("brief", "TP-03").out; !strings.Contains(out, "(server, builder) by <ada@x.org> on main\n") {
+		t.Errorf("brief:\n%s", out)
 	}
 }

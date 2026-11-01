@@ -470,7 +470,7 @@ func TestViewShowsBranchAuthorAndRef(t *testing.T) {
 		t.Errorf("note page lacks the ref link or author")
 	}
 	md := read("notes/" + id + ".md")
-	for _, want := range []string{"by Ada ada@example.com on feat/ingest", "ref: https://tracker.example/TP-03"} {
+	for _, want := range []string{"by Ada <ada@example.com> on feat/ingest", "ref: https://tracker.example/TP-03"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("note markdown lacks %q:\n%s", want, md)
 		}

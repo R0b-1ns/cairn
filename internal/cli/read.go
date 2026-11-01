@@ -44,27 +44,25 @@ func fullEntry(e store.EntryInfo, pad string) string {
 	return fmt.Sprintf("%s%s  %-8s %s%s%s", pad, e.ID, e.Type, by, indent(e.Text, pad+"    "), stateMarker(e))
 }
 
-// originLine is "by <name> <email> on <branch>" with the empty parts left out;
-// it is empty when nothing is known. Every value is sanitized.
+// originLine is "by Name <email> on branch" with the empty parts left out
+// ("by <email>", "by Name", "on branch"); it is empty when nothing is known.
+// Every value is sanitized.
 func originLine(name, email, branch string) string {
+	var who []string
+	if name != "" {
+		who = append(who, sanitize(name))
+	}
+	if email != "" {
+		who = append(who, "<"+sanitize(email)+">")
+	}
 	var parts []string
-	if who := strings.TrimSpace(sanitize(name) + " " + sanitize(email)); who != "" {
-		parts = append(parts, "by "+who)
+	if len(who) > 0 {
+		parts = append(parts, "by "+strings.Join(who, " "))
 	}
 	if branch != "" {
 		parts = append(parts, "on "+sanitize(branch))
 	}
 	return strings.Join(parts, " ")
-}
-
-// shortOrigin is the compact form for brief: the name (the email when there is
-// no name) and the branch.
-func shortOrigin(name, email, branch string) string {
-	who := name
-	if who == "" {
-		who = email
-	}
-	return originLine(who, "", branch)
 }
 
 // noteRefs lists the refs to print for a note: its own first, then the other
@@ -80,7 +78,8 @@ func noteRefs(s *session, n model.Note, add []model.Addendum) ([]string, error) 
 		}
 	}
 	push(n.Ref)
-	if base, _, ok := validate.TaskParts(s.Proj, n.Task); ok && n.Task != "" {
+	base, _, ok := validate.TaskParts(s.Proj, n.Task)
+	if ok && n.Task != "" {
 		tr, err := s.St.TaskRefs(base)
 		if err != nil {
 			return nil, err
@@ -93,8 +92,8 @@ func noteRefs(s *session, n model.Note, add []model.Addendum) ([]string, error) 
 			push(add[i].Ref)
 		}
 	}
-	if len(refs) == 0 && n.Task != "" {
-		if u := tasks.URL(s.Proj.TaskURL, n.Task); u != "" {
+	if len(refs) == 0 && ok && n.Task != "" {
+		if u := tasks.URL(s.Proj.TaskURL, base); u != "" {
 			refs = append(refs, u)
 		}
 	}

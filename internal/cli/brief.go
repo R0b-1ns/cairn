@@ -128,7 +128,7 @@ func defineBrief(fs *flag.FlagSet) Handler {
 			}
 			line := fmt.Sprintf("  %s  %-8s %-11s %s  %s (%s, %s)", h.ID, task, h.Status, day(h.At),
 				clip(sanitize(h.Title), textWidth), sanitize(h.Repo), sanitize(h.Agent))
-			if o := shortOrigin(h.AuthorName, h.AuthorEmail, h.Branch); o != "" {
+			if o := originLine(h.AuthorName, h.AuthorEmail, h.Branch); o != "" {
 				line += " " + o
 			}
 			lines = append(lines, line)
@@ -160,7 +160,7 @@ func briefRefs(s *session, task string, flt store.Filter) ([]string, error) {
 	if err != nil || len(refs) > 0 {
 		return refs, err
 	}
-	if u := tasks.URL(s.Proj.TaskURL, task); u != "" {
+	if u := tasks.URL(s.Proj.TaskURL, base); u != "" {
 		return []string{u}, nil
 	}
 	return nil, nil

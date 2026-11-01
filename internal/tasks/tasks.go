@@ -4,6 +4,7 @@ package tasks
 
 import (
 	"fmt"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -88,16 +89,13 @@ func Next(prefix string, bases []string) int {
 	return max + 1
 }
 
-// URL fills the {task} placeholder of tmpl with the base of task (no extension,
-// no leading #). It returns "" when tmpl is empty.
-func URL(tmpl, task string) string {
-	if tmpl == "" {
+// URL fills the {task} placeholder of tmpl with base, the base of a task as
+// the project's pattern splits it (validate.TaskParts), without extension. A
+// leading # is dropped and the value is escaped as one path segment. It
+// returns "" when tmpl or base is empty.
+func URL(tmpl, base string) string {
+	if tmpl == "" || base == "" {
 		return ""
 	}
-	base := task
-	if i := strings.IndexByte(base, '.'); i >= 0 {
-		base = base[:i]
-	}
-	base = strings.TrimPrefix(base, "#")
-	return strings.ReplaceAll(tmpl, "{task}", base)
+	return strings.ReplaceAll(tmpl, "{task}", url.PathEscape(strings.TrimPrefix(base, "#")))
 }
