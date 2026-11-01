@@ -1,0 +1,16 @@
+0
+n-0aaaaa  Tide import
+task: TP-03   repo: server   agent: builder   model: m-1   at: 2026-10-28T09:00:00Z
+status: done (set when written: in_progress)
+impacts: client
+commits: abc1234
+entries:
+  e-0aaaa1  change   Wrote the tide importer.
+  e-0aaaa2  decision [user] Store heights in millimetres.  (superseded by n-0ddddd)
+  e-0aaaa3  open     Which station is the reference?  (resolved by a-0ccccc)
+  e-0aaaa4  note     Data arrives hourly.
+none: helper
+
+addendum a-0ccccc  2026-10-30T08:15:00Z  builder (m-1)  status: done
+  e-0cccc1  decision [agent] Station Brest is the reference.
+  resolves: e-0aaaa3

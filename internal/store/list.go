@@ -23,6 +23,9 @@ type Filter struct {
 	TaskBase string // matches the task and its extensions
 	Task     string // matches exactly one task ID
 	Repo     string // repo of the note
+	Branch   string // branch of the note or of any of its addenda
+	Author   string // author name or email of the note or of any of its addenda
+	Ref      string // ref on any note or addendum of the entry's task (or of the note itself when it has no task)
 	Impacts  string // a repo listed in the note's impacts
 	Since    string
 	Until    string
@@ -53,6 +56,9 @@ func (s *Store) ListEntries(f Filter) ([]EntryInfo, int, error) {
 	add("n.task = ?", f.Task)
 	add("n.repo = ?", f.Repo)
 	add("EXISTS (SELECT 1 FROM json_each(n.impacts) WHERE value = ?)", f.Impacts)
+	pc, pa := provenanceWhere(f.Branch, f.Author, f.Ref)
+	where = append(where, pc...)
+	args = append(args, pa...)
 	add("COALESCE(a.at, n.at) >= ?", f.Since)
 	add("COALESCE(a.at, n.at) < ?", f.Until)
 	switch f.State {
@@ -143,7 +149,7 @@ func (s *Store) Subjects(limit int) ([]Subject, error) {
 }
 
 // NoteFilter selects note headers; zero values mean "no constraint".
-type NoteFilter struct{ TaskBase, Task, ID string }
+type NoteFilter struct{ TaskBase, Task, ID, Branch, Author, Ref string }
 
 // NoteHeader is a note without its entries; Status is the current status
 // (latest addendum carrying one, else the note's own).
@@ -156,16 +162,27 @@ type NoteHeader struct {
 	At     string       `json:"at"`
 	Title  string       `json:"title"`
 	Status model.Status `json:"status"`
+
+	Branch      string `json:"branch,omitempty"`
+	AuthorName  string `json:"author_name,omitempty"`
+	AuthorEmail string `json:"author_email,omitempty"`
+	Ref         string `json:"ref,omitempty"`
 }
 
 // NoteHeaders returns matching notes oldest first.
 func (s *Store) NoteHeaders(f NoteFilter) ([]NoteHeader, error) {
+	where := []string{"(? = '' OR n.task_base = ?)", "(? = '' OR n.task = ?)", "(? = '' OR n.id = ?)"}
+	args := []any{f.TaskBase, f.TaskBase, f.Task, f.Task, f.ID, f.ID}
+	pc, pa := provenanceWhere(f.Branch, f.Author, f.Ref)
+	where = append(where, pc...)
+	args = append(args, pa...)
 	q := `SELECT n.id, n.task, n.repo, n.agent, n.model, n.at, n.title,
 		COALESCE((SELECT a.status FROM addenda a WHERE a.note_id = n.id AND a.status IS NOT NULL
-		          ORDER BY a.at DESC, a.rowid DESC LIMIT 1), n.status)
-		FROM notes n WHERE (? = '' OR n.task_base = ?) AND (? = '' OR n.task = ?) AND (? = '' OR n.id = ?)
+		          ORDER BY a.at DESC, a.rowid DESC LIMIT 1), n.status),
+		n.branch, n.author_name, n.author_email, n.ref
+		FROM notes n WHERE ` + strings.Join(where, " AND ") + `
 		ORDER BY n.at, n.rowid`
-	rows, err := s.db.Query(q, f.TaskBase, f.TaskBase, f.Task, f.Task, f.ID, f.ID)
+	rows, err := s.db.Query(q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +191,7 @@ func (s *Store) NoteHeaders(f NoteFilter) ([]NoteHeader, error) {
 	for rows.Next() {
 		var h NoteHeader
 		var st string
-		if err := rows.Scan(&h.ID, &h.Task, &h.Repo, &h.Agent, &h.Model, &h.At, &h.Title, &st); err != nil {
+		if err := rows.Scan(&h.ID, &h.Task, &h.Repo, &h.Agent, &h.Model, &h.At, &h.Title, &st, &h.Branch, &h.AuthorName, &h.AuthorEmail, &h.Ref); err != nil {
 			return nil, err
 		}
 		h.Status = model.Status(st)

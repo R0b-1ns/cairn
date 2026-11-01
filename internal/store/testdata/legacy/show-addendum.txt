@@ -1,0 +1,6 @@
+0
+a-0ccccc  addendum to note n-0aaaaa
+agent: builder   model: m-1   at: 2026-10-30T08:15:00Z
+status: done
+e-0cccc1  decision [agent] Station Brest is the reference.
+resolves: e-0aaaa3

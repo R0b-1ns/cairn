@@ -5,7 +5,7 @@ Creates one immutable work note, from flags or from one JSON object on standard 
 ## Usage
 
 ```
-cairn add --agent NAME [--repo REPO] --model MODEL --title TITLE --status STATUS [--task TASK] [--change TEXT]... [--decision TEXT]... [--open TEXT]... [--note TEXT]... [--helper TEXT]... [--none TYPES] [--impact REPO]... [--commit HASH]... [--resolves ID]... [--supersedes ID]... [--project NAME] [--json]
+cairn add --agent NAME [--repo REPO] --model MODEL --title TITLE --status STATUS [--task TASK] [--new-task] [--ref URL] [--author "Name <email>"] [--branch NAME] [--change TEXT]... [--decision TEXT]... [--open TEXT]... [--note TEXT]... [--helper TEXT]... [--none TYPES] [--impact REPO]... [--commit HASH]... [--resolves ID]... [--supersedes ID]... [--project NAME] [--json]
 cairn add --stdin [--project NAME] [--json]
 ```
 
@@ -19,7 +19,11 @@ None. A positional argument gives exit code 2.
 |---|---|---|---|
 | `--agent` | (empty) | any name, 1-80 characters | Agent name. Required in flag mode. |
 | `--repo` | (empty) | a repo listed in the project's repos | Repo the work was done in. Optional when the project has a default repo (`cairn context` shows it); otherwise required. With `--stdin`, a missing `repo` uses the default the same way. |
-| `--task` | (empty) | a task ID matching the project task pattern, e.g. `TP-03`, `TP-03.1` | Task ID. Optional. |
+| `--task` | (empty) | a task ID matching the project task pattern, e.g. `TP-03`, `TP-03.1` | Task ID. Optional. A value that does not fit the pattern is exit 3 and the field is listed. If the pattern changes between the check and the write, the store refuses with `task <ID> does not match the task pattern`, also exit 3. |
+| `--new-task` | `false` | flag, no value | Assigns the next task number of the project (`T-1`, `T-2`, ...). Only in a project in `auto` mode, and not together with `--task`. When the project has used every number up to the maximum (`999999`), the command exits 3 with `task numbers exhausted for prefix T (max 999999)` (the prefix is the project's own). |
+| `--ref` | (empty) | URL starting with `http://` or `https://`, at most 500 characters | Link to the ticket this work belongs to. Optional. |
+| `--author` | (empty) | `Name <email>`; name at most 80 characters, email at most 120, one line | Author of the note. Default: env `CAIRN_AUTHOR`, then git `user.name` and `user.email` of the current directory. A value read from env is refused when invalid (exit 3); an invalid value read from git is dropped with a warning on standard error. Without `<...>` the whole text is the name. |
+| `--branch` | (empty) | one line, at most 200 characters | Branch the work was done on. Default: the current git branch of the current directory; empty on a detached HEAD or outside a repository. An invalid git value is dropped with a warning; an invalid `--branch` is refused (exit 3). |
 | `--model` | (empty) | any name, 1-80 characters | Model that did the work. Required in flag mode. |
 | `--title` | (empty) | one line, 1-200 characters | Short title. Required in flag mode. |
 | `--status` | (empty) | `done`, `in_progress`, `blocked` | Note status. Required in flag mode. |
@@ -37,7 +41,7 @@ None. A positional argument gives exit code 2.
 | `--project` | (empty) | a registered project name | Project to write to. Default: found from the current directory, or env `CAIRN_PROJECT`. |
 | `--json` | `false` | flag, no value | Print the saved note as JSON. |
 
-With `--stdin` the JSON object uses the keys `agent`, `repo`, `task`, `model`, `title`, `status`, `entries` (objects with `type`, `text` and, for decisions, `by`), `none`, `impacts`, `commits`, `resolves`, `supersedes`. Unknown keys are refused. `id`, `at` and entry `id` must be absent: cairn assigns them.
+With `--stdin` the JSON object uses the keys `agent`, `repo`, `task`, `model`, `title`, `status`, `entries` (objects with `type`, `text` and, for decisions, `by`), `none`, `impacts`, `commits`, `resolves`, `supersedes`, and optionally `new_task`, `ref`, `author_name`, `author_email`, `branch`. Unknown keys are refused. `id`, `at` and entry `id` must be absent: cairn assigns them.
 
 ## Output
 
@@ -62,14 +66,14 @@ cairn: invalid input, 2 field(s) to fix:
 
 A likely secret in a text field prints a warning on standard error (`warning: possible secret (...) in <field>; ...`). The note is still saved.
 
-`--json` prints the saved note: `id`, `agent`, `repo`, `at` (RFC3339 UTC), `task` (omitted when empty), `model`, `title`, `status`, `entries` (each with `id`, `type`, `text`, and `by` for decisions), and `none`, `impacts`, `commits`, `resolves`, `supersedes` when set.
+`--json` prints the saved note: `id`, `agent`, `repo`, `at` (RFC3339 UTC), `task` (omitted when empty; the assigned ID with `--new-task`), `author_name`, `author_email`, `branch`, `ref` (each omitted when empty), `model`, `title`, `status`, `entries` (each with `id`, `type`, `text`, and `by` for decisions), and `none`, `impacts`, `commits`, `resolves`, `supersedes` when set.
 
 ## Exit codes
 
 - `0`: note saved.
 - `1`: runtime error, for example the database cannot be opened or written.
-- `2`: usage error: a positional argument, or `--stdin` combined with a note flag.
-- `3`: invalid input; every bad field is listed on standard error. Also an `--resolves` or `--supersedes` ID that does not exist.
+- `2`: usage error: a positional argument, `--stdin` combined with a note flag, `--new-task` together with `--task`, or `--new-task` in a project whose task mode is not `auto` (the message names the mode; a project from before task modes is `custom`).
+- `3`: invalid input; every bad field is listed on standard error. Includes an invalid `--author`, `--branch` or `--ref`, and `new_task` with `task` in JSON. Also an `--resolves` or `--supersedes` ID that does not exist, a `--task` the store refuses (`task <ID> does not match the task pattern`), and `--new-task` when the numbers are used up (`task numbers exhausted for prefix T (max 999999)`; the one-line form, without a field list).
 - `4`: no project found.
 
 ## Examples
@@ -98,11 +102,25 @@ cairn add --agent builder --repo server --model claude-opus-5-5 --title "Pick bu
 
 Refused with exit code 3: the decision has no `user:` or `agent:` prefix.
 
+```
+cairn add --agent builder --repo server --new-task --model claude-opus-5-5 --title "Add tidal index" --status in_progress --change "Started the index." --none decision,open,note,helper
+```
+
+In an `auto` project, prints `note n-4k7q2m added (T-7, in_progress)` when `T-6` was the highest number so far. Exit code 0.
+
+```
+cairn add --agent builder --repo server --task TP-03 --ref https://example.org/browse/TP-03 --author "Ada Lovelace <ada@x.org>" --branch feat/tidal --model claude-opus-5-5 --title "Add tidal index" --status done --change "Added the index." --none decision,open,note,helper
+```
+
+Stores the ticket link, the author and the branch as given. Exit code 0.
+
 ## Notes
 
 - Every section needs at least one entry or must be listed in `--none`. A section both listed in `--none` and given entries is refused.
 - Never write the text `none` as an entry. Use `--none` instead.
 - `--decision` text must start with `user:` or `agent:`.
+- With `--stdin`, `author_name`, `author_email` and `branch` that are missing are filled the same way as the flags (env `CAIRN_AUTHOR`, then git).
+- `new_task: true` with a `task` is refused with exit code 3; `new_task: true` in a project that is not in `auto` mode is exit code 2, as the flag.
 - `--stdin` cannot be combined with any note flag other than `--project` and `--json`; that is exit code 2.
 - Notes are immutable. To change, close or replace something, use `cairn amend` with the note ID.
 - Limits: 100 entries per note, 4000 characters per entry text, 50 items per list flag.

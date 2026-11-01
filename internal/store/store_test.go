@@ -361,10 +361,10 @@ func TestReplaceCannotRewriteHistory(t *testing.T) {
 	addAddendum(t, s, model.Addendum{NoteID: n.ID, At: "2026-10-30T11:00:00Z", Resolves: []string{open}})
 	db := rawDB(t, path)
 	stmts := map[string]string{
-		"project":             "INSERT OR REPLACE INTO project SELECT id,'hijacked',mode,context,repos,default_repo,task_pattern FROM project",
-		"notes":               "INSERT OR REPLACE INTO notes SELECT id,agent,repo,at,task,task_base,task_ext,model,'REWRITTEN',status,none,impacts,commits FROM notes",
+		"project":             "INSERT OR REPLACE INTO project(id,name,mode,context,repos,default_repo,task_pattern) SELECT id,'hijacked',mode,context,repos,default_repo,task_pattern FROM project",
+		"notes":               "INSERT OR REPLACE INTO notes(id,agent,repo,at,task,task_base,task_ext,model,title,status,none,impacts,commits) SELECT id,agent,repo,at,task,task_base,task_ext,model,'REWRITTEN',status,none,impacts,commits FROM notes",
 		"entries":             "INSERT OR REPLACE INTO entries SELECT id,note_id,addendum_id,pos,type,'REWRITTEN',decided_by FROM entries",
-		"addenda":             "INSERT OR REPLACE INTO addenda SELECT id,note_id,'REWRITTEN',model,at,status FROM addenda",
+		"addenda":             "INSERT OR REPLACE INTO addenda(id,note_id,agent,model,at,status) SELECT id,note_id,'REWRITTEN',model,at,status FROM addenda",
 		"links":               "INSERT OR REPLACE INTO links SELECT seq,kind,target_entry_id,source_note_id,source_addendum_id FROM links",
 		"links by unique key": "REPLACE INTO links(kind,target_entry_id,source_note_id) SELECT kind,target_entry_id,source_addendum_id IS NULL OR 1 FROM links",
 	}

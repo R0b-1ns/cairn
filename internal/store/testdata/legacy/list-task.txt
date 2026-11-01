@@ -1,0 +1,7 @@
+0
+e-0cccc1  decision TP-03  server  2026-10-30  [agent] Station Brest is the reference.  n-0aaaaa
+e-0bbbb3  note     TP-03.1  client  2026-10-29  Uses the importer output.  n-0bbbbb
+e-0bbbb2  open     TP-03.1  client  2026-10-29  Colour scheme for spring tides?  n-0bbbbb
+e-0bbbb1  change   TP-03.1  client  2026-10-29  Drew the tide chart.  n-0bbbbb
+e-0aaaa4  note     TP-03  server  2026-10-28  Data arrives hourly.  n-0aaaaa
+e-0aaaa1  change   TP-03  server  2026-10-28  Wrote the tide importer.  n-0aaaaa

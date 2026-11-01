@@ -114,7 +114,7 @@ func TestUpdateRefusesADevBuild(t *testing.T) {
 }
 
 func initArgs(e *testEnv) []string {
-	return []string{"init", "--name", "tidepool", "--repos", "server"}
+	return []string{"init", "--name", "tidepool", "--repos", "server", "--tasks", "auto"}
 }
 
 func TestInitSaysWhenANewVersionExists(t *testing.T) {

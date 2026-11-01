@@ -11,6 +11,9 @@
 <dt>Model</dt><dd>{{.Model}}</dd>
 <dt>Repo</dt><dd>{{.Repo}}</dd>
 <dt>Impacts</dt><dd>{{if .Impacts}}{{join .Impacts ", "}}{{else}}-{{end}}</dd>
+<dt>Author</dt><dd>{{dash .Author}}</dd>
+<dt>Branch</dt><dd>{{dash .Branch}}</dd>
+<dt>Refs</dt><dd>{{template "refs" .Refs}}</dd>
 <dt>Task</dt><dd>{{dash .Task}}</dd>
 <dt>Date</dt><dd><time datetime="{{.At}}">{{.At}}</time></dd>
 <dt>Status</dt><dd><span class="badge status-{{.Status}}">{{.Status}}</span></dd>
@@ -38,6 +41,9 @@
 {{- range .Addenda}}
 <article class="addendum" id="{{.ID}}">
 <h3><code>{{.ID}}</code> by {{.Agent}} ({{.Model}}), <time datetime="{{.At}}">{{.At}}</time></h3>
+{{- if or .Author .Branch .Refs}}
+<p class="origin">{{if .Author}}Author {{.Author}}{{end}}{{if and .Author .Branch}}, {{end}}{{if .Branch}}branch {{.Branch}}{{end}}{{if .Refs}}{{if or .Author .Branch}}, {{end}}ref {{template "refs" .Refs}}{{end}}</p>
+{{- end}}
 {{- if .Status}}
 <p>Status set to <span class="badge status-{{.Status}}">{{.Status}}</span></p>
 {{- end}}
@@ -70,3 +76,5 @@
 {{- end}}
 </li>
 {{- end}}
+
+{{define "refs"}}{{if .}}{{range $i, $r := .}}{{if $i}}, {{end}}{{if $r.Link}}<a href="{{$r.URL}}" rel="noopener noreferrer">{{$r.URL}}</a>{{else}}{{$r.URL}}{{end}}{{end}}{{else}}-{{end}}{{end}}

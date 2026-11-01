@@ -12,6 +12,7 @@ import (
 
 	"github.com/R0b-1ns/cairn/internal/ids"
 	"github.com/R0b-1ns/cairn/internal/model"
+	"github.com/R0b-1ns/cairn/internal/tasks"
 )
 
 // Limits applied to input.
@@ -24,6 +25,12 @@ const (
 	MaxLine       = 80
 	MaxPatternLen = 200
 	MaxRepos      = 50
+
+	MaxAuthorName  = 80
+	MaxAuthorEmail = 120
+	MaxBranch      = 200
+	MaxRef         = 500
+	MaxTaskURL     = 500
 )
 
 // FieldError names an invalid field and says what is wrong.
@@ -37,6 +44,7 @@ type Options struct{ AllowUnknownModel bool }
 var (
 	nameRe   = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,39}$`)
 	repoRe   = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,39}$`)
+	prefixRe = regexp.MustCompile(`^[A-Z]{1,5}$`)
 	commitRe = regexp.MustCompile(`^[0-9a-f]{7,64}$`)
 )
 
@@ -83,6 +91,38 @@ func (c *collector) line(field, s string, max int) {
 		return
 	}
 	c.add(Text(field, s, max, false))
+}
+
+// optLine checks an optional one-line field.
+func (c *collector) optLine(field, s string, max int) {
+	if s != "" {
+		c.add(Text(field, s, max, false))
+	}
+}
+
+// url checks an optional http(s) URL, or URL template when tmpl is true.
+func (c *collector) url(field, s string, max int, tmpl bool) {
+	if s == "" {
+		return
+	}
+	if e := Text(field, s, max, false); e != nil {
+		c.add(e)
+		return
+	}
+	if !strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://") {
+		c.addf(field, "must start with http:// or https://")
+	}
+	if tmpl && !strings.Contains(s, "{task}") {
+		c.addf(field, "must contain {task}")
+	}
+}
+
+// provenance checks the author, branch and ref fields of a note or addendum.
+func (c *collector) provenance(name, email, branch, ref string) {
+	c.optLine("author_name", name, MaxAuthorName)
+	c.optLine("author_email", email, MaxAuthorEmail)
+	c.optLine("branch", branch, MaxBranch)
+	c.url("ref", ref, MaxRef, false)
 }
 
 func (c *collector) idList(field string, kind byte, list []string) {
@@ -194,6 +234,7 @@ func Note(n model.Note, p model.Project, o Options) []FieldError {
 			c.addf("commits", "entry is not a lowercase hex commit hash (7-64 characters)")
 		}
 	}
+	c.provenance(n.AuthorName, n.AuthorEmail, n.Branch, n.Ref)
 	c.idList("resolves", 'e', n.Resolves)
 	c.idList("supersedes", 'e', n.Supersedes)
 	c.entries(n.Entries)
@@ -242,11 +283,12 @@ func Addendum(a model.Addendum, o Options) []FieldError {
 	if a.Status != "" && !validStatus(a.Status) {
 		c.addf("status", "must be done, in_progress or blocked")
 	}
+	c.provenance(a.AuthorName, a.AuthorEmail, a.Branch, a.Ref)
 	c.idList("resolves", 'e', a.Resolves)
 	c.idList("supersedes", 'e', a.Supersedes)
 	c.entries(a.Entries)
-	if len(a.Entries) == 0 && a.Status == "" && len(a.Resolves) == 0 && len(a.Supersedes) == 0 {
-		c.addf("addendum", "is empty: give entries, a status, resolves or supersedes")
+	if len(a.Entries) == 0 && a.Status == "" && len(a.Resolves) == 0 && len(a.Supersedes) == 0 && a.Ref == "" {
+		c.addf("addendum", "is empty: give entries, a status, resolves, supersedes or a ref")
 	}
 	return c
 }
@@ -282,7 +324,24 @@ func Project(p model.Project) []FieldError {
 	} else if re.SubexpIndex("base") < 0 {
 		c.addf("task_pattern", "needs a named group (?P<base>...)")
 	}
+	c.taskMode(p)
 	return c
+}
+
+// taskMode checks the task mode, prefix and URL template; an empty mode is a
+// legacy project and only its task pattern counts.
+func (c *collector) taskMode(p model.Project) {
+	if p.TaskMode != "" && !contains(tasks.Modes(), p.TaskMode) {
+		c.addf("task_mode", "%s is not one of %s", quote(p.TaskMode), strings.Join(tasks.Modes(), ", "))
+	}
+	if p.TaskMode == tasks.Auto {
+		if !prefixRe.MatchString(p.TaskPrefix) {
+			c.addf("task_prefix", "must match %s", prefixRe)
+		}
+	} else if p.TaskPrefix != "" {
+		c.addf("task_prefix", "applies only to task mode auto")
+	}
+	c.url("task_url", p.TaskURL, MaxTaskURL, true)
 }
 
 // TaskParts splits a task ID using the project's pattern (named groups base, ext).

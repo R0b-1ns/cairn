@@ -8,7 +8,7 @@ Every new session, human or AI, starts by asking those questions again. `cairn` 
 
 - **One file, zero setup.** A single static binary: no runtime, no server.
 - **Can't be rewritten.** Notes are immutable and SQLite itself refuses edits. New facts go in addenda, so the original is never lost.
-- **Cheap to read.** `cairn brief TP-03` gives you a whole task in a few lines, always with IDs, so an agent spends its context on the answer.
+- **Cheap to read.** `cairn brief T-7` gives you a whole task in a few lines, always with IDs, so an agent spends its context on the answer.
 - **Yours to keep.** Store notes in the project's own `.cairn/` folder and share them through git, or keep them private on your machine.
 - **Made for agents.** `cairn guide` prints a one-page guide an AI can read on its own. Every command has `--help`.
 
@@ -30,10 +30,10 @@ Supported platforms: macOS and Linux, on amd64 and arm64. With Go 1.27 or newer 
 
 ```sh
 cd ~/work/tidepool
-cairn init --name tidepool --repos server,client --context "Tide data service."
+cairn init --name tidepool --repos server,client --tasks auto --context "Tide data service."
 
 # Write a note at the end of a piece of work
-cairn add --agent builder --repo server --task TP-03 --model claude-opus-5-5 \
+cairn add --agent builder --repo server --new-task --model claude-opus-5-5 \
   --title "Add tidal index" --status done \
   --change "Added the hourly tidal index table." \
   --decision "user:Index buckets are hourly, to match the sensor rate." \
@@ -41,7 +41,7 @@ cairn add --agent builder --repo server --task TP-03 --model claude-opus-5-5 \
   --none note,helper --impact client
 
 # Later, read only what you need
-cairn brief TP-03                       # everything about a task
+cairn brief T-1                        # everything about a task
 cairn list --type open                  # unresolved open points
 cairn search "tidal index"              # full-text search
 cairn show n-4k7q2m                     # one full note
@@ -52,7 +52,19 @@ cairn amend n-4k7q2m --agent builder --model claude-opus-5-5 \
   --resolves e-5t8w1k --note "Pruning runs in the nightly job."
 ```
 
-The IDs above are examples; every command prints the real ones.
+The IDs above are examples; every command prints the real ones. `--new-task` takes the next number (`T-1` here, then `T-2`, ...); continue the same work later with `--task T-1`.
+
+### Task numbering
+
+`init` asks how tasks are numbered (or takes `--tasks`), and the choice is fixed for the project:
+
+- `auto`: cairn numbers your work (`T-1`, `T-2`, ...; `--task-prefix` picks other letters). For people with no ticket tracker.
+- `jira`, `linear`, `github`: you use the tracker's IDs (`PROJ-123`, `ENG-42`, `#128`). cairn only checks the format; `--task-url "https://example.atlassian.net/browse/{task}"` makes tasks links.
+- `custom`: your own format, with `--task-pattern`.
+
+Without a terminal, `init` should be given one of these flags; otherwise it falls back to the old `TP-03` format and says so on standard error. AI agents are told by `cairn guide` to ask you which numbering you want before running `init`, and not to run it, or pick a mode for you, until you have answered.
+
+To link a ticket after the fact: `cairn amend n-4k7q2m --agent builder --model claude-opus-5-5 --ref https://example.atlassian.net/browse/PROJ-1`. Every note also records who wrote it and on which branch, read from git; `list` filters by `--author`, `--branch` and `--ref`.
 
 ## Documentation
 

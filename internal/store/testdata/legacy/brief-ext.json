@@ -1,0 +1,53 @@
+0
+{
+  "changes": [
+    {
+      "id": "e-0bbbb1",
+      "type": "change",
+      "text": "Drew the tide chart.",
+      "by": "",
+      "note_id": "n-0bbbbb",
+      "addendum_id": "",
+      "task": "TP-03.1",
+      "repo": "client",
+      "at": "2026-10-29T10:30:00Z",
+      "closed": false,
+      "closed_by": "",
+      "closed_at": ""
+    }
+  ],
+  "changes_total": 1,
+  "decisions": [],
+  "decisions_total": 0,
+  "notes": [
+    {
+      "id": "n-0bbbbb",
+      "task": "TP-03.1",
+      "repo": "client",
+      "agent": "reviewer",
+      "model": "m-2",
+      "at": "2026-10-29T10:30:00Z",
+      "title": "Chart for tides",
+      "status": "done"
+    }
+  ],
+  "notes_total": 1,
+  "open": [
+    {
+      "id": "e-0bbbb2",
+      "type": "open",
+      "text": "Colour scheme for spring tides?",
+      "by": "",
+      "note_id": "n-0bbbbb",
+      "addendum_id": "",
+      "task": "TP-03.1",
+      "repo": "client",
+      "at": "2026-10-29T10:30:00Z",
+      "closed": false,
+      "closed_by": "",
+      "closed_at": ""
+    }
+  ],
+  "open_total": 1,
+  "task": "TP-03.1"
+}

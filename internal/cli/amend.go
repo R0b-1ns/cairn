@@ -18,7 +18,7 @@ func defineAmend(fs *flag.FlagSet) Handler {
 	var f common
 	f.projectFlag(fs)
 	f.jsonFlag(fs)
-	var agent, mdl, status string
+	var agent, mdl, status, ref, author, branch string
 	var change, decision, open, note, helper, resolves, supersedes multi
 	var stdin bool
 	fs.StringVar(&agent, "agent", "", "agent name (required)")
@@ -31,6 +31,9 @@ func defineAmend(fs *flag.FlagSet) Handler {
 	fs.Var(&helper, "helper", "a reusable building block (repeatable)")
 	fs.Var(&resolves, "resolves", "ID of an open entry this addendum resolves, in any note (repeatable)")
 	fs.Var(&supersedes, "supersedes", "ID of a decision entry this addendum replaces, in any note (repeatable)")
+	fs.StringVar(&ref, "ref", "", "URL of the ticket this work belongs to (http or https)")
+	fs.StringVar(&author, "author", "", `author as "Name <email>" (default: env CAIRN_AUTHOR, then git user.name and user.email)`)
+	fs.StringVar(&branch, "branch", "", "branch the work was done on (default: the current git branch)")
 	fs.BoolVar(&stdin, "stdin", false, "read the addendum as one JSON object from standard input instead of flags")
 	return func(c *Ctx, args []string) int {
 		if len(args) != 1 {
@@ -65,8 +68,9 @@ func defineAmend(fs *flag.FlagSet) Handler {
 			}
 		} else {
 			a = model.Addendum{Agent: agent, Model: mdl, Status: model.Status(status),
-				Entries: entriesFromFlags(change, decision, open, note, helper), Resolves: resolves, Supersedes: supersedes}
+				Entries: entriesFromFlags(change, decision, open, note, helper), Resolves: resolves, Supersedes: supersedes, Ref: ref}
 		}
+		errs = append(errs, fillOrigin(c, &a.AuthorName, &a.AuthorEmail, &a.Branch, author, branch)...)
 		a.NoteID = args[0]
 		a.At = timestamp()
 		normalizeEntries(a.Entries)

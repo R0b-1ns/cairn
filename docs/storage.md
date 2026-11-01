@@ -113,7 +113,8 @@ Modes are set at creation. The process umask can only make them narrower.
 - Each write transaction starts immediately, taking the write lock at the start.
 - Busy timeout: **5000 ms**. A writer that finds the database locked waits up to 5 seconds, then fails.
 - Foreign keys on. `trusted_schema` off.
-- Schema version: **1** (`PRAGMA user_version = 1`).
+- Schema version: **4** (`PRAGMA user_version = 4`).
+- Migration: a version 3 database is upgraded to 4 when it is opened. Before anything is copied or changed, the version 3 database must pass the same checks as below, against the version 3 schema (integrity, the ten triggers, the exact schema); a database that fails is refused and left byte-for-byte unchanged, with no backup. Then cairn copies the file to `<database>.v3.bak` next to the database (mode `0600`, overwritten if present; do not commit it, and delete it once you no longer need it); if the copy fails, the database is not touched and the command fails with an error that mentions the backup. The upgrade only adds columns and runs in one transaction; two processes opening the same file at once both succeed and the columns are added once. Databases older than version 3 are not supported.
 
 ### Only `init` creates a database
 
@@ -123,9 +124,9 @@ Modes are set at creation. The process umask can only make them narrower.
 
 ### Verification on every open
 
-Before any command runs, the database must pass every check. Failure refuses the database (exit 1) and changes nothing.
+Before any command runs, the database must pass every check. Failure refuses the database (exit 1) and changes nothing: for a version 3 database the checks run against the version 3 schema before the backup and the upgrade, and again against the version 4 schema after.
 
-1. `PRAGMA user_version` equals `1`. Otherwise: `unsupported database version <n>`.
+1. `PRAGMA user_version` equals `4`, after any migration described above. Otherwise: `unsupported database version <n>`; for a version newer than the build, the message ends with `; run 'cairn update' to upgrade`.
 2. `PRAGMA quick_check(1)` returns `ok`.
 3. All ten immutability triggers exist with the exact SQL cairn creates. Otherwise: `immutability trigger <name> is missing` or `was altered`.
 4. Every object in `sqlite_master` (tables, indexes, triggers, and the full-text search index) matches the expected definition exactly. An extra, missing, or altered object refuses the database.

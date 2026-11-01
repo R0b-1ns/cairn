@@ -1,0 +1,173 @@
+0
+{
+  "format": "cairn-export",
+  "version": 1,
+  "project": {
+    "name": "tidepool",
+    "mode": "project",
+    "context": "Tide data service.",
+    "repos": [
+      "server",
+      "client"
+    ],
+    "default_repo": "server",
+    "task_pattern": "^(?P<base>[A-Z]{2,5}-\\d{1,4})(?:\\.(?P<ext>\\d{1,3}))?$"
+  },
+  "notes": [
+    {
+      "id": "n-0aaaaa",
+      "agent": "builder",
+      "repo": "server",
+      "at": "2026-10-28T09:00:00Z",
+      "task": "TP-03",
+      "model": "m-1",
+      "title": "Tide import",
+      "status": "in_progress",
+      "entries": [
+        {
+          "id": "e-0aaaa1",
+          "type": "change",
+          "text": "Wrote the tide importer."
+        },
+        {
+          "id": "e-0aaaa2",
+          "type": "decision",
+          "text": "Store heights in millimetres.",
+          "by": "user"
+        },
+        {
+          "id": "e-0aaaa3",
+          "type": "open",
+          "text": "Which station is the reference?"
+        },
+        {
+          "id": "e-0aaaa4",
+          "type": "note",
+          "text": "Data arrives hourly."
+        }
+      ],
+      "none": [
+        "helper"
+      ],
+      "impacts": [
+        "client"
+      ],
+      "commits": [
+        "abc1234"
+      ]
+    },
+    {
+      "id": "n-0bbbbb",
+      "agent": "reviewer",
+      "repo": "client",
+      "at": "2026-10-29T10:30:00Z",
+      "task": "TP-03.1",
+      "model": "m-2",
+      "title": "Chart for tides",
+      "status": "done",
+      "entries": [
+        {
+          "id": "e-0bbbb1",
+          "type": "change",
+          "text": "Drew the tide chart."
+        },
+        {
+          "id": "e-0bbbb2",
+          "type": "open",
+          "text": "Colour scheme for spring tides?"
+        },
+        {
+          "id": "e-0bbbb3",
+          "type": "note",
+          "text": "Uses the importer output."
+        }
+      ],
+      "none": [
+        "decision",
+        "helper"
+      ]
+    },
+    {
+      "id": "n-0ddddd",
+      "agent": "builder",
+      "repo": "server",
+      "at": "2026-10-31T12:00:00Z",
+      "task": "TP-04",
+      "model": "m-1",
+      "title": "Units rework",
+      "status": "blocked",
+      "entries": [
+        {
+          "id": "e-0dddd1",
+          "type": "change",
+          "text": "Switched to centimetres."
+        },
+        {
+          "id": "e-0dddd2",
+          "type": "decision",
+          "text": "Store heights in centimetres.",
+          "by": "user"
+        }
+      ],
+      "none": [
+        "open",
+        "note",
+        "helper"
+      ],
+      "impacts": [
+        "client",
+        "server"
+      ],
+      "supersedes": [
+        "e-0aaaa2"
+      ]
+    },
+    {
+      "id": "n-0eeeee",
+      "agent": "builder",
+      "repo": "server",
+      "at": "2026-11-01T07:00:00Z",
+      "model": "m-1",
+      "title": "Housekeeping",
+      "status": "done",
+      "entries": [
+        {
+          "id": "e-0eeee1",
+          "type": "change",
+          "text": "Renamed the tide module."
+        },
+        {
+          "id": "e-0eeee2",
+          "type": "note",
+          "text": "No behaviour change."
+        }
+      ],
+      "none": [
+        "decision",
+        "open",
+        "helper"
+      ]
+    }
+  ],
+  "addenda": [
+    {
+      "id": "a-0ccccc",
+      "note_id": "n-0aaaaa",
+      "agent": "builder",
+      "model": "m-1",
+      "at": "2026-10-30T08:15:00Z",
+      "status": "done",
+      "entries": [
+        {
+          "id": "e-0cccc1",
+          "type": "decision",
+          "text": "Station Brest is the reference.",
+          "by": "agent"
+        }
+      ],
+      "resolves": [
+        "e-0aaaa3"
+      ]
+    }
+  ]
+}

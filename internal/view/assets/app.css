@@ -176,3 +176,5 @@ table.rows { width: 100%; border-collapse: collapse; }
   .card dl { grid-template-columns: 1fr; }
   .card dt { margin-top: 0.3rem; }
 }
+.more, .origin { color: var(--muted); font-size: 0.85rem; }
+.origin { margin: 0.2rem 0; }

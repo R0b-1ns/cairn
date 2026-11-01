@@ -12,6 +12,7 @@ import (
 	"github.com/R0b-1ns/cairn/internal/model"
 	"github.com/R0b-1ns/cairn/internal/registry"
 	"github.com/R0b-1ns/cairn/internal/store"
+	"github.com/R0b-1ns/cairn/internal/tasks"
 	"github.com/R0b-1ns/cairn/internal/validate"
 )
 
@@ -26,23 +27,82 @@ func init() {
 
 func defineInit(fs *flag.FlagSet) Handler {
 	var p model.Project
-	var repos, path string
+	var repos, path, taskMode string
+	var noInput bool
 	fs.StringVar(&p.Name, "name", "", "project name: lowercase letters, digits, - and _ (required)")
 	fs.StringVar(&p.Mode, "mode", model.ModeProject, "storage mode: project (database in .cairn/) or machine (database in the data directory)")
 	fs.StringVar(&path, "path", "", "project root folder (default: current directory)")
 	fs.StringVar(&p.Context, "context", "", "a few lines describing the project")
 	fs.StringVar(&repos, "repos", "", "comma-separated allowed repo names (required)")
 	fs.StringVar(&p.DefaultRepo, "default-repo", "", "repo used by add when --repo is omitted; must be one of --repos (default: the only repo when there is just one)")
-	fs.StringVar(&p.TaskPattern, "task-pattern", model.DefaultTaskPattern, "regular expression with a named group (?P<base>...) and optionally (?P<ext>...)")
+	fs.StringVar(&p.TaskPattern, "task-pattern", "", "custom task format: a regular expression with a named group (?P<base>...) and optionally (?P<ext>...); alone it means --tasks custom (default when no task flag is given: "+model.DefaultTaskPattern+")")
+	fs.StringVar(&taskMode, "tasks", "", "task numbering mode: "+strings.Join(tasks.Modes(), ", ")+" (see --task-pattern for the default when omitted)")
+	fs.StringVar(&p.TaskPrefix, "task-prefix", "", "1-5 capital letters for the auto mode (default: T)")
+	fs.StringVar(&p.TaskURL, "task-url", "", "link template containing {task}, for example https://example.com/browse/{task}")
+	fs.BoolVar(&noInput, "no-input", false, "do not ask questions even in a terminal")
 	return func(c *Ctx, args []string) int {
 		if len(args) != 0 {
 			return fail(c, ExitUsage, "init takes no arguments")
+		}
+		given := setFlags(fs)
+		if c.Interactive && !noInput {
+			v := &initValues{P: &p, Repos: &repos, Path: &path, TaskMode: &taskMode}
+			if err := askInit(c, given, v); err != nil {
+				return fail(c, ExitRuntime, "%v", err)
+			}
 		}
 		p.Repos = splitList(repos)
 		if p.DefaultRepo == "" && len(p.Repos) == 1 {
 			p.DefaultRepo = p.Repos[0] // most projects have one repo: no need to name it every time
 		}
-		if errs := validate.Project(p); len(errs) != 0 {
+		var errs []validate.FieldError
+		legacy := false
+		switch {
+		case given["tasks"] && given["task-pattern"] && taskMode != tasks.Custom:
+			return fail(c, ExitUsage, "--task-pattern only goes with --tasks custom (or alone, which means custom)")
+		case given["task-pattern"]:
+			taskMode = tasks.Custom
+		case !given["tasks"]:
+			taskMode, p.TaskPattern, legacy = tasks.Custom, model.DefaultTaskPattern, true
+		}
+		placeholder := false // a task flag error was recorded: skip the checks that would only repeat it
+		switch {
+		case tasks.Describe(taskMode) == "":
+			errs = append(errs, validate.FieldError{Field: "tasks", Message: fmt.Sprintf("unknown task mode %q: use one of %s", taskMode, strings.Join(tasks.Modes(), ", "))})
+			placeholder = true
+		case taskMode == tasks.Custom && given["tasks"] && !given["task-pattern"]:
+			errs = append(errs, validate.FieldError{Field: "tasks", Message: "--tasks custom needs --task-pattern"})
+			placeholder = true
+		case given["task-pattern"] && p.TaskPattern == "":
+			errs = append(errs, validate.FieldError{Field: "task_pattern", Message: "must not be empty; omit --task-pattern to get the default"})
+			placeholder = true
+		}
+		if taskMode != tasks.Auto && p.TaskPrefix != "" {
+			msg := "--task-prefix applies to the auto mode only"
+			if !given["tasks"] {
+				msg = "--task-prefix needs --tasks auto"
+			}
+			errs = append(errs, validate.FieldError{Field: "task_prefix", Message: msg})
+			p.TaskPrefix = ""
+		}
+		if placeholder {
+			p.TaskPattern = model.DefaultTaskPattern
+		} else {
+			p.TaskMode = taskMode
+			if taskMode == tasks.Auto && p.TaskPrefix == "" {
+				p.TaskPrefix = "T"
+			}
+			if taskMode != tasks.Custom {
+				pat, err := tasks.Pattern(taskMode, p.TaskPrefix)
+				if err != nil {
+					// the prefix is reported by validate.Project below
+					pat = model.DefaultTaskPattern
+				}
+				p.TaskPattern = pat
+			}
+		}
+		errs = append(errs, validate.Project(p)...)
+		if len(errs) != 0 {
 			return reportFieldErrors(c, errs)
 		}
 		if path == "" {
@@ -98,6 +158,9 @@ func defineInit(fs *flag.FlagSet) Handler {
 			return fail(c, ExitRuntime, "%v", err)
 		}
 		fmt.Fprintf(c.Stdout, "initialized project %s (%s mode) at %s\ndatabase: %s\n", p.Name, p.Mode, root, dbPath)
+		if legacy {
+			fmt.Fprintln(c.Stderr, "cairn: note: task numbering was not chosen; using the default TP-03 format (see --tasks)")
+		}
 		noticeNewVersion(c)
 		return ExitOK
 	}
@@ -135,6 +198,18 @@ func defineContext(fs *flag.FlagSet) Handler {
 			fmt.Fprintf(c.Stdout, "default repo: %s\n", p.DefaultRepo)
 		}
 		fmt.Fprintf(c.Stdout, "task pattern: %s\n", p.TaskPattern)
+		// Projects made before task modes have no mode: print nothing more, so
+		// their output stays as it was.
+		if p.TaskMode != "" {
+			if p.TaskMode == tasks.Auto {
+				fmt.Fprintf(c.Stdout, "task mode: %s (prefix %s)\n", p.TaskMode, p.TaskPrefix)
+			} else {
+				fmt.Fprintf(c.Stdout, "task mode: %s\n", p.TaskMode)
+			}
+			if p.TaskURL != "" {
+				fmt.Fprintf(c.Stdout, "task url: %s\n", p.TaskURL)
+			}
+		}
 		if p.Context != "" {
 			fmt.Fprintf(c.Stdout, "\n%s\n", p.Context)
 		}

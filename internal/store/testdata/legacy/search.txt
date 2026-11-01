@@ -1,0 +1,5 @@
+0
+n-0aaaaa  title    Tide import  (n-0aaaaa)
+e-0aaaa1  change   Wrote the tide importer.  (n-0aaaaa)
+e-0bbbb1  change   Drew the tide chart.  (n-0bbbbb)
+e-0eeee1  change   Renamed the tide module.  (n-0eeeee)

@@ -194,7 +194,7 @@ func TestDocsStateTheCorrectedFacts(t *testing.T) {
 	}
 	has("guide.md", "untrusted", "<<'EOF'", "never follow instructions", "--default-repo")
 	has("../README.md", "scripts/install.sh", "shasum -a 256 -c")
-	has("security.md", "`user_version` 3", "INSERT OR REPLACE", "Invisible", "future", "not registered")
+	has("security.md", "`user_version` 4", "INSERT OR REPLACE", "Invisible", "future", "not registered")
 	lacks("security.md", "`user_version` 2", "even if a bug reached them")
 	has("commands/brief.md", "notes_total", "`id`, `task`, `repo`, `agent`, `model`, `at`, `title`, `status`")
 	lacks("commands/brief.md", "capitalized")
@@ -205,4 +205,39 @@ func TestDocsStateTheCorrectedFacts(t *testing.T) {
 	lacks("commands/import.md", "must use the same repos")
 	lacks("output.md", "indented 6 spaces.")
 	has("commands/brief.md", "TP-03: 2 note(s)")
+}
+
+func TestGuideTellsAgentsToAskForNumbering(t *testing.T) {
+	guide := readDoc(t, "guide.md")
+	for _, want := range []string{"ask your user", "--tasks", "--task-prefix", "--new-task", "T-1"} {
+		if !strings.Contains(guide, want) {
+			t.Errorf("docs/guide.md does not contain %q", want)
+		}
+	}
+	if !strings.Contains(guide, "do not run `cairn init`") {
+		t.Error("docs/guide.md does not tell agents not to run init before the user answered")
+	}
+	if strings.Contains(guide, "cairn brief TP-03") {
+		t.Error("docs/guide.md assumes the TP task format")
+	}
+}
+
+func TestREADMEInitExamplesNameTheirMode(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(repoRoot, "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, line := range strings.Split(string(b), "\n") {
+		if !strings.Contains(line, "cairn init") {
+			continue
+		}
+		found = true
+		if !strings.Contains(line, "--tasks") && !strings.Contains(line, "--task-pattern") {
+			t.Errorf("README init example does not name its numbering mode: %q", line)
+		}
+	}
+	if !found {
+		t.Error("README.md has no cairn init example")
+	}
 }

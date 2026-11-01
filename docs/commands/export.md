@@ -35,6 +35,10 @@ Tide data service. Sensor ingest, the tidal index and the browser client.
 
 task: TP-03 · repo: server · agent: builder (claude-opus-5-5) · at: 2026-10-30T09:12:44Z · status: done
 
+by Ada <ada@example.org> on feat/tidal-index
+
+ref: https://tracker.example.org/browse/TP-03
+
 ### change
 
 - `e-3w9k1d` Added the hourly tidal index table.
@@ -51,11 +55,13 @@ none: note, helper
 
 #### addendum a-9x3b2c · builder (claude-opus-5-5) · 2026-10-31T08:02:10Z · status: done
 
+- by Bob <bob@example.org> on fix/prune
+- ref: https://tracker.example.org/browse/TP-03-prune
 - `e-8k3m5p` Pruning was added in the nightly job.
 - resolves: e-5c8r0t
 ```
 
-Markdown is for reading; it is not meant to be imported.
+Markdown is for reading; it is not meant to be imported. The `by ...` line (empty parts left out) and the `ref:` line of a note appear after its metadata line, and only when set; an addendum shows them as list items under its heading. Only the `ref` stored on that note or addendum is printed, not a link computed from the project's ticket URL.
 
 With `--format json` the document is an object with `format` (always `cairn-export`), `version` (`1`), `project` (the project configuration), `notes` (full notes with their IDs) and `addenda` (full addenda with their IDs), indented by two spaces.
 
@@ -92,5 +98,6 @@ Replaces the existing regular file with the new export. Exit code 0. Without `--
 
 - Use `--format json` to move notes: `cairn import` accepts only that format.
 - `--out` never follows a symbolic link. It replaces a file only with `--force`, and only when the existing path is a regular file.
+- JSON notes and addenda carry `author_name`, `author_email`, `branch` and `ref` when they are set; `cairn import` restores them.
 - The export contains every field of every note, including personal data that was stored in notes. Treat the file as sensitive.
 - Export is read-only; it never changes the database.

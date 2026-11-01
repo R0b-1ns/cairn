@@ -11,6 +11,8 @@ import (
 	"github.com/R0b-1ns/cairn/internal/ids"
 	"github.com/R0b-1ns/cairn/internal/model"
 	"github.com/R0b-1ns/cairn/internal/store"
+	"github.com/R0b-1ns/cairn/internal/tasks"
+	"github.com/R0b-1ns/cairn/internal/validate"
 )
 
 func init() {
@@ -40,6 +42,80 @@ func fullEntry(e store.EntryInfo, pad string) string {
 		by = "[" + e.By + "] "
 	}
 	return fmt.Sprintf("%s%s  %-8s %s%s%s", pad, e.ID, e.Type, by, indent(e.Text, pad+"    "), stateMarker(e))
+}
+
+// originLine is "by Name <email> on branch" with the empty parts left out
+// ("by <email>", "by Name", "on branch"); it is empty when nothing is known.
+// Every value is sanitized.
+func originLine(name, email, branch string) string {
+	var who []string
+	if name != "" {
+		who = append(who, sanitize(name))
+	}
+	if email != "" {
+		who = append(who, "<"+sanitize(email)+">")
+	}
+	var parts []string
+	if len(who) > 0 {
+		parts = append(parts, "by "+strings.Join(who, " "))
+	}
+	if branch != "" {
+		parts = append(parts, "on "+sanitize(branch))
+	}
+	return strings.Join(parts, " ")
+}
+
+// briefOrigin is the compact origin of a brief line, to spare the agent's
+// tokens: "by Name on branch", or "by email on branch" when there is no name.
+// The email is never printed next to a name. Empty parts are left out.
+func briefOrigin(name, email, branch string) string {
+	who := name
+	if who == "" {
+		who = email
+	}
+	var parts []string
+	if who != "" {
+		parts = append(parts, "by "+sanitize(who))
+	}
+	if branch != "" {
+		parts = append(parts, "on "+sanitize(branch))
+	}
+	return strings.Join(parts, " ")
+}
+
+// noteRefs lists the refs to print for a note: its own first, then the other
+// refs of its task (newest first), or those of its addenda when it has no task.
+// With no stored ref anywhere it falls back to the project's link template.
+func noteRefs(s *session, n model.Note, add []model.Addendum) ([]string, error) {
+	var refs []string
+	seen := map[string]bool{}
+	push := func(r string) {
+		if r != "" && !seen[r] {
+			seen[r] = true
+			refs = append(refs, r)
+		}
+	}
+	push(n.Ref)
+	base, _, ok := validate.TaskParts(s.Proj, n.Task)
+	if ok && n.Task != "" {
+		tr, err := s.St.TaskRefs(base)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range tr {
+			push(r)
+		}
+	} else {
+		for i := len(add) - 1; i >= 0; i-- {
+			push(add[i].Ref)
+		}
+	}
+	if len(refs) == 0 && ok && n.Task != "" {
+		if u := tasks.URL(s.Proj.TaskURL, base); u != "" {
+			refs = append(refs, u)
+		}
+	}
+	return refs, nil
 }
 
 func defineShow(fs *flag.FlagSet) Handler {
@@ -117,12 +193,17 @@ func showNote(c *Ctx, s *session, id string, asJSON bool) error {
 	if err != nil {
 		return err
 	}
+	refs, err := noteRefs(s, n, add)
+	if err != nil {
+		return err
+	}
 	if asJSON {
 		printJSON(c, struct {
 			model.Note
 			CurrentStatus model.Status     `json:"current_status"`
 			Addenda       []model.Addendum `json:"addenda"`
-		}{n, cur, nonNil(add)})
+			Refs          []string         `json:"refs,omitempty"`
+		}{n, cur, nonNil(add), refs})
 		return nil
 	}
 	fmt.Fprintf(c.Stdout, "%s  %s\n", n.ID, sanitize(n.Title))
@@ -136,6 +217,12 @@ func showNote(c *Ctx, s *session, id string, asJSON bool) error {
 		status += " (set when written: " + string(n.Status) + ")"
 	}
 	fmt.Fprintln(c.Stdout, status)
+	if o := originLine(n.AuthorName, n.AuthorEmail, n.Branch); o != "" {
+		fmt.Fprintln(c.Stdout, o)
+	}
+	for _, r := range refs {
+		fmt.Fprintf(c.Stdout, "ref: %s\n", sanitize(r))
+	}
 	if len(n.Impacts) > 0 {
 		fmt.Fprintf(c.Stdout, "impacts: %s\n", sanitize(strings.Join(n.Impacts, ", ")))
 	}
@@ -160,6 +247,9 @@ func showNote(c *Ctx, s *session, id string, asJSON bool) error {
 			fmt.Fprintf(c.Stdout, "  status: %s", a.Status)
 		}
 		fmt.Fprintln(c.Stdout)
+		if o := originLine(a.AuthorName, a.AuthorEmail, a.Branch); o != "" {
+			fmt.Fprintf(c.Stdout, "  %s\n", o)
+		}
 		es, err := states(s, a.Entries)
 		if err != nil {
 			return err
@@ -185,6 +275,12 @@ func showAddendum(c *Ctx, s *session, id string, asJSON bool) error {
 	fmt.Fprintf(c.Stdout, "agent: %s   model: %s   at: %s\n", sanitize(a.Agent), sanitize(a.Model), a.At)
 	if a.Status != "" {
 		fmt.Fprintf(c.Stdout, "status: %s\n", a.Status)
+	}
+	if o := originLine(a.AuthorName, a.AuthorEmail, a.Branch); o != "" {
+		fmt.Fprintln(c.Stdout, o)
+	}
+	if a.Ref != "" {
+		fmt.Fprintf(c.Stdout, "ref: %s\n", sanitize(a.Ref))
 	}
 	es, err := states(s, a.Entries)
 	if err != nil {
@@ -236,7 +332,7 @@ func parseTime(v string, until bool) (string, error) {
 func defineList(fs *flag.FlagSet) Handler {
 	var f common
 	f.all(fs)
-	var typ, task, repo, impacts, since, until string
+	var typ, task, repo, impacts, since, until, branch, author, ref string
 	var resolved, all bool
 	fs.StringVar(&typ, "type", "", "entry type: change, decision, open, note or helper")
 	fs.StringVar(&task, "task", "", "task ID; a base task includes its extensions, an extension matches exactly")
@@ -244,6 +340,9 @@ func defineList(fs *flag.FlagSet) Handler {
 	fs.StringVar(&impacts, "impacts", "", "repo listed in the note's impacts")
 	fs.StringVar(&since, "since", "", "only entries at or after this date (YYYY-MM-DD or RFC3339)")
 	fs.StringVar(&until, "until", "", "only entries up to and including this date (YYYY-MM-DD or RFC3339)")
+	fs.StringVar(&branch, "branch", "", "branch of the note or of one of its addenda")
+	fs.StringVar(&author, "author", "", "author name or email of the note or of one of its addenda")
+	fs.StringVar(&ref, "ref", "", "ticket URL, exact match; a note of the same task also matches")
 	fs.BoolVar(&resolved, "resolved", false, "show only resolved open points and superseded decisions, with what closes them")
 	fs.BoolVar(&all, "all", false, "show everything, closed or not")
 	return func(c *Ctx, args []string) int {
@@ -258,6 +357,7 @@ func defineList(fs *flag.FlagSet) Handler {
 		}
 		var flt store.Filter
 		flt.Limit, flt.Repo, flt.Impacts = f.max, repo, impacts
+		flt.Branch, flt.Author, flt.Ref = branch, author, ref
 		if typ != "" {
 			ok := false
 			for _, t := range model.EntryTypes {

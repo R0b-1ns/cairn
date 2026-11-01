@@ -11,9 +11,12 @@ Environment variables that cairn reads. Flags win over variables where both appl
 | `HOME` | Default data directory on macOS and other systems | If empty and `CAIRN_HOME` is unset, cairn fails | Base of the default data directory. |
 | `XDG_DATA_HOME` | Default data directory on systems other than macOS | `$HOME/.local/share` | Base of the default data directory: `$XDG_DATA_HOME/cairn`. Ignored on macOS. An empty value counts as unset. |
 | `CAIRN_NO_UPDATE_CHECK` | `init` | Unset | Any non-empty value skips the check for a newer release that `init` runs after creating a project. |
+| `CAIRN_AUTHOR` | `add`, `amend` | Unset | Author as `Name <email>`, used when `--author` is not given. Without `<...>` the whole text is the name. An invalid value is refused with exit code 3; the message names the field with `(from CAIRN_AUTHOR)`, for example `author_name (from CAIRN_AUTHOR): contains a control character`. When unset, git `user.name` and `user.email` are used. An empty value counts as unset. |
 | `SUDO_UID` | Trust check on project-mode stores, only when the process runs as root | Unset | Numeric user ID that invoked `sudo`. A project store owned by this user is trusted by root. Other stores are refused. |
 
 Precedence for the project name: `--project` flag, then `CAIRN_PROJECT`, then the walk from the current directory.
+
+Precedence for the author of a note: `--author`, then `CAIRN_AUTHOR`, then git.
 
 Precedence for the data directory: `CAIRN_HOME`, then the platform default.
 
@@ -35,7 +38,7 @@ CAIRN_PROJECT=tidepool cairn list --task TP-03
 Keep the registry and machine-mode databases in a chosen folder:
 
 ```sh
-CAIRN_HOME=/srv/cairn-data cairn init --name tidepool --mode machine --repos server,client
+CAIRN_HOME=/srv/cairn-data cairn init --name tidepool --mode machine --repos server,client --tasks auto
 CAIRN_HOME=/srv/cairn-data cairn projects
 ```
 

@@ -52,7 +52,7 @@ cairn: import refused, nothing was imported: ... already exists with different c
 - `0`: imported, or everything was already present.
 - `1`: runtime error: the file cannot be opened, an ID conflicts with different stored content, or the database fails.
 - `2`: usage error: not exactly one argument.
-- `3`: invalid input: the file is not valid JSON, has unknown keys, is not a cairn export (`format` must be `cairn-export`, `version` must be `1`), is larger than 32 MiB, or a note or entry fails validation.
+- `3`: invalid input: the file is not valid JSON, has unknown keys, is not a cairn export (`format` must be `cairn-export`, `version` must be `1`), is larger than 32 MiB, a note carries `new_task` (`notes[0].new_task: is input for add only and cannot be imported`), or a note or entry fails validation.
 - `4`: no project found.
 
 ## Examples
@@ -81,6 +81,8 @@ Run a second time on the same data: prints `imported 0 notes and 0 addenda (7 al
 - Every note and every entry must carry its `id` (`n-`, `a-`, `e-`). Hand-written files without IDs are refused with exit code 3.
 - Identical items already present are skipped and counted as "already present". Items with the same ID but different content refuse the whole import (exit code 1); nothing is written.
 - Every note must use a repo listed in the target project, and a task that matches its task pattern; otherwise exit code 3.
+- `author_name`, `author_email`, `branch` and `ref` of notes and addenda are validated like on `add` and stored as given. Files exported before these keys existed still import; they simply carry none.
+- `new_task` is input for `cairn add` and is refused in an import, because it would renumber the note.
 - The `unknown` model name is accepted on import only.
 - Import never modifies the target project's configuration or any existing note.
 - Input is checked completely before any write; the write is one transaction.

@@ -71,13 +71,13 @@ func sanitizeSite(site *view.Site) {
 	for i := range site.Notes {
 		nv := &site.Notes[i]
 		h := &nv.Header
-		for _, f := range []*string{&h.ID, &h.Task, &h.Repo, &h.Agent, &h.Model, &h.At, &h.Title} {
+		for _, f := range []*string{&h.ID, &h.Task, &h.Repo, &h.Agent, &h.Model, &h.At, &h.Title, &h.Branch, &h.AuthorName, &h.AuthorEmail, &h.Ref} {
 			*f = sanitize(*f)
 		}
 		h.Status = model.Status(sanitize(string(h.Status)))
 		nv.Written = model.Status(sanitize(string(nv.Written)))
 		n := &nv.Note
-		for _, f := range []*string{&n.ID, &n.Agent, &n.Repo, &n.At, &n.Task, &n.Model, &n.Title} {
+		for _, f := range []*string{&n.ID, &n.Agent, &n.Repo, &n.At, &n.Task, &n.Model, &n.Title, &n.Branch, &n.AuthorName, &n.AuthorEmail, &n.Ref} {
 			*f = sanitize(*f)
 		}
 		n.Status = model.Status(sanitize(string(n.Status)))
@@ -87,13 +87,14 @@ func sanitizeSite(site *view.Site) {
 		for j := range n.None {
 			n.None[j] = model.EntryType(sanitize(string(n.None[j])))
 		}
+		list(nv.TaskRefs)
 		list(n.Impacts)
 		list(n.Commits)
 		list(n.Resolves)
 		list(n.Supersedes)
 		for j := range nv.Addenda {
 			a := &nv.Addenda[j]
-			for _, f := range []*string{&a.ID, &a.NoteID, &a.Agent, &a.Model, &a.At} {
+			for _, f := range []*string{&a.ID, &a.NoteID, &a.Agent, &a.Model, &a.At, &a.Branch, &a.AuthorName, &a.AuthorEmail, &a.Ref} {
 				*f = sanitize(*f)
 			}
 			a.Status = model.Status(sanitize(string(a.Status)))
@@ -112,7 +113,9 @@ func sanitizeSite(site *view.Site) {
 	}
 	for i := range site.Entries {
 		info(&site.Entries[i].EntryInfo)
-		site.Entries[i].Agent = sanitize(site.Entries[i].Agent)
+		for _, f := range []*string{&site.Entries[i].Agent, &site.Entries[i].Branch, &site.Entries[i].AuthorName, &site.Entries[i].AuthorEmail} {
+			*f = sanitize(*f)
+		}
 	}
 }
 

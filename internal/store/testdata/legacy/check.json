@@ -1,0 +1,32 @@
+5
+{
+  "missing_notes": [
+    {
+      "task": "TP-09",
+      "detail": "no note for this task"
+    }
+  ],
+  "not_done": [
+    {
+      "task": "TP-04",
+      "detail": "latest note n-0ddddd is blocked"
+    }
+  ],
+  "ok": false,
+  "old_open": [
+    {
+      "id": "e-0bbbb2",
+      "type": "open",
+      "text": "Colour scheme for spring tides?",
+      "by": "",
+      "note_id": "n-0bbbbb",
+      "addendum_id": "",
+      "task": "TP-03.1",
+      "repo": "client",
+      "at": "2026-10-29T10:30:00Z",
+      "closed": false,
+      "closed_by": "",
+      "closed_at": ""
+    }
+  ]
+}

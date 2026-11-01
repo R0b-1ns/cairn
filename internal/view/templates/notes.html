@@ -14,18 +14,22 @@
 <th scope="col" data-sort="title"><button type="button">Title</button></th>
 <th scope="col" data-sort="repo"><button type="button">Repo</button></th>
 <th scope="col" data-sort="agent"><button type="button">Agent</button></th>
+<th scope="col" data-sort="branch"><button type="button">Branch</button></th>
+<th scope="col" data-sort="author"><button type="button">Author</button></th>
 <th scope="col" data-sort="status"><button type="button">Status</button></th>
 <th scope="col" data-sort="open" data-numeric="true"><button type="button">Open points</button></th>
 </tr>
 </thead>
 <tbody>
 {{- range .Content.Rows}}
-<tr data-id="{{.ID}}" data-status="{{.Status}}" data-task="{{.Task}}" data-task-base="{{.TaskBase}}" data-repo="{{.Repo}}" data-agent="{{.Agent}}" data-at="{{.At}}" data-open="{{.OpenPoints}}" data-title="{{.Title}}" data-text="{{.Text}}">
+<tr data-id="{{.ID}}" data-status="{{.Status}}" data-task="{{.Task}}" data-task-base="{{.TaskBase}}" data-repo="{{.Repo}}" data-agent="{{.Agent}}" data-branch="{{.Branch}}" data-author="{{.Author}}" data-branches="{{.Branches}}" data-authors="{{.Authors}}" data-at="{{.At}}" data-open="{{.OpenPoints}}" data-title="{{.Title}}" data-text="{{.Text}}">
 <td class="nowrap"><time datetime="{{.At}}">{{date .At}}</time></td>
 <td>{{dash .Task}}</td>
 <td><a href="notes/{{.ID}}.html">{{.Title}}</a></td>
 <td>{{.Repo}}</td>
 <td>{{.Agent}}</td>
+<td>{{dash .Branch}}{{with .MoreBranches}} <span class="more">+ {{join . ", "}}</span>{{end}}</td>
+<td>{{dash .Author}}{{with .MoreAuthors}} <span class="more">+ {{join . ", "}}</span>{{end}}</td>
 <td><span class="badge status-{{.Status}}">{{.Status}}</span></td>
 <td class="num">{{.OpenPoints}}</td>
 </tr>

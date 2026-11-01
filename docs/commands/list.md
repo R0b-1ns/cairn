@@ -5,7 +5,7 @@ Lists entries (changes, decisions, open points, notes, helpers), newest first, w
 ## Usage
 
 ```
-cairn list [--type TYPE] [--task TASK] [--repo REPO] [--impacts REPO] [--since DATE] [--until DATE] [--resolved | --all] [--max N] [--project NAME] [--json]
+cairn list [--type TYPE] [--task TASK] [--repo REPO] [--impacts REPO] [--branch BRANCH] [--author AUTHOR] [--ref URL] [--since DATE] [--until DATE] [--resolved | --all] [--max N] [--project NAME] [--json]
 ```
 
 ## Arguments
@@ -20,6 +20,9 @@ None. A positional argument gives exit code 2.
 | `--task` | (empty) | a task ID matching the project task pattern | Only entries of this task. A base task includes its extensions; an extension matches exactly. |
 | `--repo` | (empty) | a repo of the project | Only entries of notes written in this repo. |
 | `--impacts` | (empty) | a repo of the project | Only entries of notes that list this repo in their impacts. |
+| `--branch` | (empty) | a branch name | Only entries of notes written on this branch; a note matches when it or one of its addenda was written there. |
+| `--author` | (empty) | an author name or email | Only entries of notes by this author, matched exactly against the name or the email of the note or of one of its addenda. |
+| `--ref` | (empty) | a ticket URL | Only entries of notes linked to this URL: the note or one of its addenda carries it, or another note or addendum of the same task does. Exact match. |
 | `--since` | (empty) | `YYYY-MM-DD` or RFC3339 | Only entries at or after this time. A date means 00:00 UTC. |
 | `--until` | (empty) | `YYYY-MM-DD` or RFC3339 | Only entries up to and including this time. A date includes the whole day. |
 | `--resolved` | `false` | flag, no value | Show only resolved open points and superseded decisions, with what closed them. Cannot be combined with `--all`. |
@@ -71,6 +74,18 @@ cairn list --since 2026-10-01 --until 2026-10-31 --repo client --max 20
 ```
 
 Prints up to 20 entries of notes written in `client` during October 2026. Exit code 0.
+
+```
+cairn list --branch fix/prune --author ada@example.org
+```
+
+Prints the entries of notes by `ada@example.org` that were written on `fix/prune`. Exit code 0.
+
+```
+cairn list --ref https://tracker.example.org/browse/TP-03
+```
+
+Prints the entries of every note of the task linked to that ticket. Exit code 0.
 
 ```
 cairn list --resolved --type open --json

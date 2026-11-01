@@ -2,6 +2,7 @@ package view
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/R0b-1ns/cairn/internal/model"
@@ -165,5 +166,37 @@ func TestEntriesOfFiltersByType(t *testing.T) {
 	got := site.EntriesOf(model.TypeNote)
 	if len(got) != 1 || got[0].Text != "n" {
 		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestCollectCarriesOriginAndTaskRefs(t *testing.T) {
+	s := newStore(t)
+	n1 := note("2026-10-30T10:00:00Z", "A", model.Entry{Type: model.TypeDecision, Text: "d1", By: "user"})
+	n1.Branch, n1.AuthorName, n1.AuthorEmail, n1.Ref = "feat/x", "Ada", "ada@example.com", "https://t.example/TP-01"
+	n1 = insert(t, s, n1)
+	n2 := note("2026-10-30T11:00:00Z", "B")
+	n2.Branch = "main"
+	insert(t, s, n2)
+	a, err := s.InsertAddendum(model.Addendum{NoteID: n1.ID, Agent: "reviewer", Model: "m", At: "2026-10-30T12:00:00Z",
+		Branch: "review/y", AuthorName: "Bob", Ref: "https://t.example/review",
+		Entries: []model.Entry{{Type: model.TypeDecision, Text: "d2", By: "agent"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	site := collect(t, s)
+	for _, nv := range site.Notes { // both notes share the task TP-01
+		if got := strings.Join(nv.TaskRefs, ","); got != "https://t.example/review,https://t.example/TP-01" {
+			t.Errorf("%s task refs %q", nv.Header.ID, got)
+		}
+	}
+	byText := map[string]EntryRow{}
+	for _, e := range site.Entries {
+		byText[e.Text] = e
+	}
+	if e := byText["d1"]; e.Branch != "feat/x" || e.AuthorName != "Ada" || e.AuthorEmail != "ada@example.com" {
+		t.Errorf("note entry origin %+v", e)
+	}
+	if e := byText["d2"]; e.AddendumID != a.ID || e.Branch != "review/y" || e.AuthorName != "Bob" || e.AuthorEmail != "" {
+		t.Errorf("addendum entry origin %+v", e)
 	}
 }

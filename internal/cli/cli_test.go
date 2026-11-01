@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -25,4 +27,31 @@ func TestUnknownCommandExit2(t *testing.T) {
 	if code != 2 || !strings.Contains(errs, "unknown command") {
 		t.Fatalf("code=%d err=%q", code, errs)
 	}
+}
+
+func TestIsTerminalRefusesNonTerminals(t *testing.T) {
+	null, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer null.Close()
+	if isTerminal(null) {
+		t.Error("/dev/null counted as a terminal")
+	}
+	reg, err := os.Create(filepath.Join(t.TempDir(), "f"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if isTerminal(reg) {
+		t.Error("a regular file counted as a terminal")
+	}
+	reg.Close()
+	if isTerminal(reg) {
+		t.Error("a closed file counted as a terminal")
+	}
+	if isTerminal(nil) {
+		t.Error("nil counted as a terminal")
+	}
+	// A real terminal cannot be created portably in a test, so the positive
+	// case is not covered here.
 }

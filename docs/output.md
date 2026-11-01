@@ -36,6 +36,8 @@ For a note:
 n-4k7q2m  Add tidal index
 task: TP-03   repo: server   agent: builder   model: claude-opus-5-5   at: 2026-10-30T10:00:00Z
 status: done
+by Ada <ada@example.org> on feat/tidal-index
+ref: https://tracker.example.org/browse/TP-03
 impacts: client
 commits: 3f9c2ab
 entries:
@@ -47,6 +49,8 @@ none: note, helper
 
 - Line 1: note ID, two spaces, full title.
 - `task` shows `-` when empty. `status` shows `status: <current>`. If the current status differs from the note's own, it adds `(set when written: <own>)`.
+- `by Name <email> on branch` follows the status line, the email in angle brackets; parts that are empty are left out (`by Name on branch`, `by <email>`, `on branch`) and the whole line is omitted when all are empty. Each addendum prints the same line, indented two spaces, under its header line.
+- `ref: <url>` lines follow: the note's own ref first, then the other refs of the same task, newest first, each once. With no stored ref and a project ticket URL, one line holds the link computed from the task.
 - `impacts`, `commits`, `none` and `resolves`/`supersedes` lines appear only when they have values.
 - Each entry: two spaces, ID, two spaces, type padded to 8, a space, `[user]` or `[agent]` for decisions, the text. A closed entry ends with `  (resolved by <id>)` or `  (superseded by <id>)`.
 - Continuation lines of multi-line text are indented under the text: 6 spaces in `show` of a note, 4 in `show` of an addendum or an entry.
@@ -81,8 +85,9 @@ With no matches: `no entries`. If more match than `--max` allows: `... 12 more (
 
 ```
 TP-03: 2 note(s)
+refs: https://tracker.example.org/browse/TP-03
 notes:
-  n-4k7q2m  TP-03    done        2026-10-30  Add tidal index (server, builder)
+  n-4k7q2m  TP-03    done        2026-10-30  Add tidal index (server, builder) by Ada on feat/tidal-index
   n-8c2e6t  TP-03.1  in_progress 2026-10-31  Tidal index follow-up (client, builder)
 changes:
   e-7h2m9q  Added the hourly tidal index table.  (n-4k7q2m)
@@ -92,7 +97,8 @@ open points:
   e-5w4n8p  Should old buckets be pruned after 90 days?  (n-4k7q2m)
 ```
 
-- The header is `<task>: <count> note(s)`. Notes are listed oldest first: ID, task, status (padded to 11), date, title, then `(repo, agent)`.
+- The header is `<task>: <count> note(s)`. Notes are listed oldest first: ID, task, status (padded to 11), date, title, then `(repo, agent)`, then a compact origin ` by Name on branch` (the name, or the email when there is no name, never both; unlike `show`, which also prints the email), with the empty parts left out, when the note has an author or a branch.
+- `refs: <url>, <url>` comes right after the header: all refs of the task, newest first, or the link computed from the project's ticket URL when none is stored; the line is omitted when there is neither.
 - Then three sections: `changes:`, `decisions in force:`, `open points:`. Entries are listed oldest first. Each shows ID, text, and the note (`(<n-id>)`, or `(<n-id> via <a-id>)`).
 - An empty section prints `  none`.
 - With no notes: `no notes for task <task>`.
@@ -148,11 +154,11 @@ task pattern: ^(?P<base>[A-Z]{2,5}-\d{1,4})(?:\.(?P<ext>\d{1,3}))?$
 Tide data service.
 ```
 
-The blank line and context appear only when the project has a context.
+The blank line and context appear only when the project has a context. A `default repo: <repo>` line follows `repos:` when the project has one. A project with a task mode adds `task mode: <mode>` after `task pattern:` (`task mode: auto (prefix T)` in `auto` mode), then `task url: <template>` when it has a ticket URL; a project created before schema version 4 prints neither.
 
 ### export (markdown)
 
-`cairn export` with the default `--format md` writes a readable document, not an import file. It has a `# <project>` heading, the context, then for each note a `## <n-id>  <title>` heading, a metadata line `task: ... · repo: ... · agent: ... (<model>) · at: ... · status: ...`, one `### <type>` section per type, with each entry as a list item that starts with its ID in backticks, then `none:`, `impacts:`, `commits:` lines, and addenda as `#### addendum ...` blocks. Use `--format json` to make an import file (see `note-json.md`).
+`cairn export` with the default `--format md` writes a readable document, not an import file. It has a `# <project>` heading, the context, then for each note a `## <n-id>  <title>` heading, a metadata line `task: ... · repo: ... · agent: ... (<model>) · at: ... · status: ...`, one `### <type>` section per type, with each entry as a list item that starts with its ID in backticks, then `none:`, `impacts:`, `commits:` lines, and addenda as `#### addendum ...` blocks. A note shows `by Name <email> on branch` (empty parts left out, as in `show`) and `ref: <url>` lines after the metadata line, an addendum shows `- by ...` and `- ref: ...` items under its heading; each only when set. Use `--format json` to make an import file (see `note-json.md`).
 
 ## --json
 
@@ -162,15 +168,15 @@ Every command that lists or shows data accepts `--json`, which prints indented J
 |---|---|
 | `add` | The stored note: `id`, `agent`, `repo`, `at`, `task`, `model`, `title`, `status`, `entries` (with IDs), and `none`, `impacts`, `commits`, `resolves`, `supersedes` when set. |
 | `amend` | The stored addendum: `id`, `note_id`, `agent`, `model`, `at`, `status` when set, `entries`, `resolves`, `supersedes`. |
-| `show <n-id>` | The note, plus `current_status` and `addenda` (an array, possibly empty). |
+| `show <n-id>` | The note, plus `current_status`, `addenda` (an array, possibly empty) and `refs` (the links of the `ref:` lines; omitted when empty). |
 | `show <a-id>` | The addendum. |
 | `show <e-id>` | One entry object (see below). |
 | `list` | An array of entry objects. |
 | `search` | An array of hits: `kind`, `id`, `note_id`, `addendum_id`, `type`, `snippet`. |
-| `brief` | An object: `task`, `notes` (headers), `changes`, `decisions`, `open`. Not capped by `--max`. |
+| `brief` | An object: `task`, `notes` (headers), `changes`, `decisions`, `open`, and `refs` (the links of the `refs:` line; omitted when empty). Not capped by `--max`. |
 | `recent` | An array: `subject`, `last_at`, `status`, `title`, `note_id`, `notes`. |
 | `check` | An object: `missing_notes`, `not_done`, `old_open`, `ok`. |
-| `context` | The project object: `name`, `mode`, `context`, `repos`, `task_pattern`. |
+| `context` | The project object: `name`, `mode`, `context`, `repos`, `default_repo`, `task_pattern`, and, when set, `task_mode`, `task_prefix`, `task_url`. |
 | `projects` | An array: `name`, `mode`, `path`, `notes` (`-1` when unreadable), `missing`. |
 
 An entry object always has every key: `id`, `type`, `text`, `by` (empty unless a decision), `note_id`, `addendum_id` (empty unless from an addendum), `task`, `repo`, `at`, `closed` (boolean), `closed_by`, `closed_at`.

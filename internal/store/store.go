@@ -74,17 +74,12 @@ func (s *Store) init(p model.Project) error {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.Exec(tableSQL); err != nil {
+	if err := buildSchema(tx, SchemaVersion); err != nil {
 		return err
 	}
-	for _, stmt := range triggerSQL() {
-		if _, err := tx.Exec(stmt); err != nil {
-			return err
-		}
-	}
 	repos, _ := json.Marshal(p.Repos)
-	if _, err := tx.Exec(`INSERT INTO project(id,name,mode,context,repos,default_repo,task_pattern) VALUES (1,?,?,?,?,?,?)`,
-		p.Name, p.Mode, p.Context, string(repos), p.DefaultRepo, p.TaskPattern); err != nil {
+	if _, err := tx.Exec(`INSERT INTO project(id,name,mode,context,repos,default_repo,task_pattern,task_mode,task_prefix,task_url) VALUES (1,?,?,?,?,?,?,?,?,?)`,
+		p.Name, p.Mode, p.Context, string(repos), p.DefaultRepo, p.TaskPattern, p.TaskMode, p.TaskPrefix, p.TaskURL); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
@@ -109,6 +104,10 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	s := &Store{db: db, path: path}
+	if err := s.migrate(); err != nil {
+		db.Close()
+		return nil, err
+	}
 	if err := s.verify(); err != nil {
 		db.Close()
 		return nil, err
@@ -121,14 +120,29 @@ func (s *Store) verify() error {
 	if err := s.db.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
 		return fmt.Errorf("not a cairn database: %w", err)
 	}
+	if v > SchemaVersion {
+		return fmt.Errorf("unsupported database version %d (this build supports %d); run 'cairn update' to upgrade", v, SchemaVersion)
+	}
 	if v != SchemaVersion {
 		return fmt.Errorf("unsupported database version %d (this build supports %d)", v, SchemaVersion)
 	}
+	return verifyShape(s.db, v)
+}
+
+// querier runs queries; satisfied by *sql.DB and *sql.Tx.
+type querier interface {
+	Query(query string, args ...any) (*sql.Rows, error)
+	QueryRow(query string, args ...any) *sql.Row
+}
+
+// verifyShape checks integrity, triggers and the exact schema of a database
+// claimed to be at schema version v.
+func verifyShape(q querier, v int) error {
 	var check string
-	if err := s.db.QueryRow("PRAGMA quick_check(1)").Scan(&check); err != nil || check != "ok" {
+	if err := q.QueryRow("PRAGMA quick_check(1)").Scan(&check); err != nil || check != "ok" {
 		return fmt.Errorf("database integrity check failed: %v %s", err, check)
 	}
-	rows, err := s.db.Query("SELECT name, COALESCE(sql,'') FROM sqlite_master WHERE type='trigger'")
+	rows, err := q.Query("SELECT name, COALESCE(sql,'') FROM sqlite_master WHERE type='trigger'")
 	if err != nil {
 		return fmt.Errorf("not a cairn database: %w", err)
 	}
@@ -153,18 +167,18 @@ func (s *Store) verify() error {
 			return fmt.Errorf("immutability trigger %s was altered: database refused", name)
 		}
 	}
-	if err := s.verifySchema(); err != nil {
+	if err := verifySchema(q, v); err != nil {
 		return err
 	}
 	var n int
-	if err := s.db.QueryRow("SELECT COUNT(*) FROM project").Scan(&n); err != nil || n != 1 {
+	if err := q.QueryRow("SELECT COUNT(*) FROM project").Scan(&n); err != nil || n != 1 {
 		return fmt.Errorf("project row missing: database refused")
 	}
 	return nil
 }
 
 // schemaObjects maps "type:name" to normalized SQL for everything in sqlite_master.
-func schemaObjects(db *sql.DB) (map[string]string, error) {
+func schemaObjects(db querier) (map[string]string, error) {
 	rows, err := db.Query("SELECT type, name, COALESCE(sql,'') FROM sqlite_master")
 	if err != nil {
 		return nil, err
@@ -181,33 +195,29 @@ func schemaObjects(db *sql.DB) (map[string]string, error) {
 	return out, rows.Err()
 }
 
-// expectedSchema builds the reference schema in memory from the same SQL used by Create.
-func expectedSchema() (map[string]string, error) {
+// expectedSchema builds the reference schema of the given version in memory from
+// the same SQL used by Create: the baseline plus every migration below version.
+func expectedSchema(version int) (map[string]string, error) {
 	db, err := sql.Open("sqlite", "file::memory:")
 	if err != nil {
 		return nil, err
 	}
 	defer db.Close()
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(tableSQL); err != nil {
+	if err := buildSchema(db, version); err != nil {
 		return nil, err
-	}
-	for _, stmt := range triggerSQL() {
-		if _, err := db.Exec(stmt); err != nil {
-			return nil, err
-		}
 	}
 	return schemaObjects(db)
 }
 
 // verifySchema refuses a database whose schema differs in any way from ours:
 // extra or missing tables, indexes, views or triggers, or altered definitions.
-func (s *Store) verifySchema() error {
-	want, err := expectedSchema()
+func verifySchema(q querier, version int) error {
+	want, err := expectedSchema(version)
 	if err != nil {
 		return err
 	}
-	have, err := schemaObjects(s.db)
+	have, err := schemaObjects(q)
 	if err != nil {
 		return fmt.Errorf("not a cairn database: %w", err)
 	}
@@ -236,8 +246,8 @@ func (s *Store) Path() string { return s.path }
 func (s *Store) Project() (model.Project, error) {
 	var p model.Project
 	var repos string
-	err := s.db.QueryRow(`SELECT name,mode,context,repos,default_repo,task_pattern FROM project WHERE id=1`).
-		Scan(&p.Name, &p.Mode, &p.Context, &repos, &p.DefaultRepo, &p.TaskPattern)
+	err := s.db.QueryRow(`SELECT name,mode,context,repos,default_repo,task_pattern,task_mode,task_prefix,task_url FROM project WHERE id=1`).
+		Scan(&p.Name, &p.Mode, &p.Context, &repos, &p.DefaultRepo, &p.TaskPattern, &p.TaskMode, &p.TaskPrefix, &p.TaskURL)
 	if err != nil {
 		return p, err
 	}
@@ -388,16 +398,30 @@ func (s *Store) InsertNote(n model.Note) (model.Note, error) {
 
 func insertNoteTx(tx *sql.Tx, p model.Project, n model.Note) (model.Note, error) {
 	var err error
-	base, ext, _ := validate.TaskParts(p, n.Task)
+	if n.NewTask {
+		if n.Task, err = nextTask(tx, p); err != nil {
+			return n, err
+		}
+		n.NewTask = false
+	}
+	var base, ext string
+	if n.Task != "" {
+		var ok bool
+		if base, ext, ok = validate.TaskParts(p, n.Task); !ok {
+			// Never store a task without its base: it would be unreachable by
+			// task queries and invisible to automatic numbering.
+			return n, &TaskError{fmt.Sprintf("task %s does not match the task pattern", n.Task)}
+		}
+	}
 	if n.At, err = normAt(n.At); err != nil {
 		return n, err
 	}
 	if n.ID, err = assignID(tx, 'n', n.ID); err != nil {
 		return n, err
 	}
-	if _, err = tx.Exec(`INSERT INTO notes(id,agent,repo,at,task,task_base,task_ext,model,title,status,none,impacts,commits) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	if _, err = tx.Exec(`INSERT INTO notes(id,agent,repo,at,task,task_base,task_ext,model,title,status,none,impacts,commits,author_name,author_email,branch,ref) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		n.ID, n.Agent, n.Repo, n.At, n.Task, base, ext, n.Model, n.Title, string(n.Status),
-		jsonList(n.None), jsonList(n.Impacts), jsonList(n.Commits)); err != nil {
+		jsonList(n.None), jsonList(n.Impacts), jsonList(n.Commits), n.AuthorName, n.AuthorEmail, n.Branch, n.Ref); err != nil {
 		return n, err
 	}
 	if _, err = tx.Exec(`INSERT INTO search(text,kind,id,note_id) VALUES (?,?,?,?)`, n.Title, "note", n.ID, n.ID); err != nil {
@@ -439,8 +463,8 @@ func insertAddendumTx(tx *sql.Tx, a model.Addendum) (model.Addendum, error) {
 		return a, err
 	}
 	st := sql.NullString{String: string(a.Status), Valid: a.Status != ""}
-	if _, err = tx.Exec(`INSERT INTO addenda(id,note_id,agent,model,at,status) VALUES (?,?,?,?,?,?)`,
-		a.ID, a.NoteID, a.Agent, a.Model, a.At, st); err != nil {
+	if _, err = tx.Exec(`INSERT INTO addenda(id,note_id,agent,model,at,status,author_name,author_email,branch,ref) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		a.ID, a.NoteID, a.Agent, a.Model, a.At, st, a.AuthorName, a.AuthorEmail, a.Branch, a.Ref); err != nil {
 		return a, err
 	}
 	if a.Entries, err = insertEntries(tx, "", a.ID, a.Entries); err != nil {
@@ -495,8 +519,8 @@ func loadLinks(db *sql.DB, col, id string) (resolves, supersedes []string, err e
 func (s *Store) GetNote(id string) (model.Note, error) {
 	var n model.Note
 	var st, none, impacts, commits string
-	err := s.db.QueryRow(`SELECT id,agent,repo,at,task,model,title,status,none,impacts,commits FROM notes WHERE id=?`, id).
-		Scan(&n.ID, &n.Agent, &n.Repo, &n.At, &n.Task, &n.Model, &n.Title, &st, &none, &impacts, &commits)
+	err := s.db.QueryRow(`SELECT id,agent,repo,at,task,model,title,status,none,impacts,commits,author_name,author_email,branch,ref FROM notes WHERE id=?`, id).
+		Scan(&n.ID, &n.Agent, &n.Repo, &n.At, &n.Task, &n.Model, &n.Title, &st, &none, &impacts, &commits, &n.AuthorName, &n.AuthorEmail, &n.Branch, &n.Ref)
 	if errors.Is(err, sql.ErrNoRows) {
 		return n, fmt.Errorf("%w: %s", ErrNotFound, id)
 	}
@@ -529,8 +553,8 @@ func (s *Store) GetNote(id string) (model.Note, error) {
 func (s *Store) GetAddendum(id string) (model.Addendum, error) {
 	var a model.Addendum
 	var st sql.NullString
-	err := s.db.QueryRow(`SELECT id,note_id,agent,model,at,status FROM addenda WHERE id=?`, id).
-		Scan(&a.ID, &a.NoteID, &a.Agent, &a.Model, &a.At, &st)
+	err := s.db.QueryRow(`SELECT id,note_id,agent,model,at,status,author_name,author_email,branch,ref FROM addenda WHERE id=?`, id).
+		Scan(&a.ID, &a.NoteID, &a.Agent, &a.Model, &a.At, &st, &a.AuthorName, &a.AuthorEmail, &a.Branch, &a.Ref)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, fmt.Errorf("%w: %s", ErrNotFound, id)
 	}

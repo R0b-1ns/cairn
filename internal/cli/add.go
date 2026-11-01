@@ -1,10 +1,13 @@
 package cli
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 
 	"github.com/R0b-1ns/cairn/internal/model"
+	"github.com/R0b-1ns/cairn/internal/store"
+	"github.com/R0b-1ns/cairn/internal/tasks"
 	"github.com/R0b-1ns/cairn/internal/validate"
 )
 
@@ -16,9 +19,9 @@ func defineAdd(fs *flag.FlagSet) Handler {
 	var f common
 	f.projectFlag(fs)
 	f.jsonFlag(fs)
-	var agent, repo, task, mdl, title, status, none string
+	var agent, repo, task, mdl, title, status, none, ref, author, branch string
 	var change, decision, open, note, helper, impact, commit, resolves, supersedes multi
-	var stdin bool
+	var stdin, newTask bool
 	fs.StringVar(&agent, "agent", "", "agent name (required)")
 	fs.StringVar(&repo, "repo", "", "repo the work was done in; must be one of the project's repos (default: the project's default repo)")
 	fs.StringVar(&task, "task", "", "task ID matching the project's task pattern (optional)")
@@ -35,6 +38,10 @@ func defineAdd(fs *flag.FlagSet) Handler {
 	fs.Var(&commit, "commit", "commit hash attached to the note (repeatable or comma-separated)")
 	fs.Var(&resolves, "resolves", "ID of an open entry this note resolves (repeatable)")
 	fs.Var(&supersedes, "supersedes", "ID of a decision entry this note replaces (repeatable)")
+	fs.BoolVar(&newTask, "new-task", false, "assign the next task number (auto mode only); cannot be combined with --task")
+	fs.StringVar(&ref, "ref", "", "URL of the ticket this work belongs to (http or https)")
+	fs.StringVar(&author, "author", "", `author as "Name <email>" (default: env CAIRN_AUTHOR, then git user.name and user.email)`)
+	fs.StringVar(&branch, "branch", "", "branch the work was done on (default: the current git branch)")
 	fs.BoolVar(&stdin, "stdin", false, "read the note as one JSON object from standard input instead of flags")
 	return func(c *Ctx, args []string) int {
 		if len(args) != 0 {
@@ -42,6 +49,9 @@ func defineAdd(fs *flag.FlagSet) Handler {
 		}
 		if stdin && !onlyAllowed(setFlags(fs), "stdin", "project", "json") {
 			return fail(c, ExitUsage, "--stdin cannot be combined with note flags (only --project and --json)")
+		}
+		if newTask && task != "" {
+			return fail(c, ExitUsage, "--new-task cannot be combined with --task")
 		}
 		s, code := openProject(c, f.project)
 		if s == nil {
@@ -60,13 +70,17 @@ func defineAdd(fs *flag.FlagSet) Handler {
 				return fail(c, ExitValidation, "%v", err)
 			}
 			errs = assignedByCairn(n.ID, n.At, n.Entries)
+			if n.NewTask && n.Task != "" {
+				errs = append(errs, validate.FieldError{Field: "new_task", Message: "cannot be true when task is given"})
+			}
 			n.ID, n.At = "", ""
 			for i := range n.Entries {
 				n.Entries[i].ID = ""
 			}
 		} else {
 			n = model.Note{Agent: agent, Repo: repo, Task: task, Model: mdl, Title: title,
-				Status: model.Status(status), Resolves: resolves, Supersedes: supersedes}
+				Status: model.Status(status), Resolves: resolves, Supersedes: supersedes,
+				Ref: ref, NewTask: newTask}
 			n.Entries = entriesFromFlags(change, decision, open, note, helper)
 			for _, t := range splitList(none) {
 				n.None = append(n.None, model.EntryType(t))
@@ -78,6 +92,10 @@ func defineAdd(fs *flag.FlagSet) Handler {
 				n.Commits = append(n.Commits, splitList(v)...)
 			}
 		}
+		if n.NewTask && s.Proj.TaskMode != tasks.Auto {
+			return fail(c, ExitUsage, "%s", notAutoMessage(s.Proj))
+		}
+		errs = append(errs, fillOrigin(c, &n.AuthorName, &n.AuthorEmail, &n.Branch, author, branch)...)
 		if n.Repo == "" {
 			n.Repo = s.Proj.DefaultRepo
 		}
@@ -91,6 +109,9 @@ func defineAdd(fs *flag.FlagSet) Handler {
 		warnSecrets(c, entryFields(n.Title, n.Entries))
 		out, err := s.St.InsertNote(n)
 		if err != nil {
+			if errors.Is(err, store.ErrNotAuto) {
+				return fail(c, ExitUsage, "%s", notAutoMessage(s.Proj))
+			}
 			return storeFailure(c, err)
 		}
 		if f.json {
