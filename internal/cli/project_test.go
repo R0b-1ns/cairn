@@ -322,6 +322,9 @@ func TestInitTasksFlagErrors(t *testing.T) {
 		code int
 	}{
 		{"conflict", []string{"--tasks", "jira", "--task-pattern", "x"}, ExitUsage},
+		{"conflict auto", []string{"--tasks", "auto", "--task-pattern", "x"}, ExitUsage},
+		{"empty pattern", []string{"--task-pattern", ""}, ExitValidation},
+		{"prefix alone", []string{"--task-prefix", "AB"}, ExitValidation},
 		{"invalid prefix", []string{"--tasks", "auto", "--task-prefix", "ab1"}, ExitValidation},
 		{"prefix without auto", []string{"--tasks", "jira", "--task-prefix", "AB"}, ExitValidation},
 		{"bad url", []string{"--tasks", "jira", "--task-url", "https://x/y"}, ExitValidation},
@@ -383,4 +386,52 @@ func TestExistingCustomPatternUnchanged(t *testing.T) {
 // addWithTask is a minimal valid flag-mode add for the given repo and task.
 func addWithTask(repo, task string) []string {
 	return withFlags(append(noneBut("change"), "--change", "x", "--repo", repo, "--task", task)...)
+}
+
+func TestInitTasksCustomWithPattern(t *testing.T) {
+	e := newEnv(t)
+	pat := `^(?P<base>[A-Z]+-\d+)$`
+	e.initProject("--tasks", "custom", "--task-pattern", pat)
+	m := contextJSON(t, e)
+	if m["task_mode"] != "custom" || m["task_pattern"] != pat {
+		t.Fatalf("got %v", m)
+	}
+}
+
+func TestInitTasksLinearAndGitHub(t *testing.T) {
+	for mode, id := range map[string]string{"linear": "ENG-42", "github": "#128"} {
+		e := newEnv(t)
+		e.initProject("--tasks", mode)
+		want, _ := tasks.Pattern(mode, "")
+		if m := contextJSON(t, e); m["task_mode"] != mode || m["task_pattern"] != want {
+			t.Fatalf("%s: got %v", mode, m)
+		}
+		if r := e.run(addWithTask("server", id)...); r.code != 0 {
+			t.Errorf("%s %s: %+v", mode, id, r)
+		}
+	}
+}
+
+func TestInitPrefixAloneMessage(t *testing.T) {
+	e := newEnv(t)
+	r := e.run("init", "--name", "p", "--repos", "a", "--task-prefix", "AB")
+	if r.code != ExitValidation || !strings.Contains(r.err, "--tasks auto") {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestInitTaskErrorsListedTogether(t *testing.T) {
+	e := newEnv(t)
+	r := e.run("init", "--name", "Bad", "--repos", "a", "--tasks", "bogus")
+	if r.code != ExitValidation || !strings.Contains(r.err, "tasks:") || !strings.Contains(r.err, "name:") {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestInitTaskURLAlone(t *testing.T) {
+	e := newEnv(t)
+	r := e.mustRun("init", "--name", "p", "--repos", "a", "--task-url", "https://x/{task}")
+	if !strings.Contains(r.err, "task numbering was not chosen") {
+		t.Fatalf("stderr: %q", r.err)
+	}
 }

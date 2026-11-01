@@ -22,10 +22,10 @@ None. A positional argument gives exit code 2.
 | `--context` | (empty) | text, up to 2000 characters, newlines allowed | A few lines describing the project. Shown by `cairn context`. |
 | `--repos` | (empty) | comma-separated names; each lowercase letters, digits, `.`, `-`, `_`, 1-40 characters; at most 50 | Allowed repo names. Required, at least one. |
 | `--default-repo` | (empty; the only repo when `--repos` lists exactly one) | one of the names in `--repos` | Repo that `cairn add` uses when `--repo` is omitted. Stored as the project key `default_repo`; refused with exit 3 if it is not in `--repos`. |
-| `--tasks` | (empty; see Task numbering) | `auto`, `jira`, `linear`, `github`, `custom` | How tasks are numbered. The mode compiles to the stored task pattern (see `configuration.md`). `custom` needs `--task-pattern`. An unknown value is refused with exit 3, listing the valid modes. Cannot be combined with `--task-pattern` (exit 2). |
-| `--task-prefix` | (empty; `T` for `auto`) | 1-5 capital letters (`^[A-Z]{1,5}$`) | Prefix of the `auto` mode: `FEAT` gives `FEAT-1`, `FEAT-2`. Refused with exit 3 with any other mode. |
+| `--tasks` | (empty; see Task numbering) | `auto`, `jira`, `linear`, `github`, `custom` | How tasks are numbered. The mode compiles to the stored task pattern (see `configuration.md`). `custom` needs `--task-pattern` (exit 3 without it). The other modes cannot be combined with `--task-pattern` (exit 2). An unknown value is refused with exit 3, listing the valid modes. |
+| `--task-prefix` | (empty; `T` for `auto`) | 1-5 capital letters (`^[A-Z]{1,5}$`) | Prefix of the `auto` mode: `FEAT` gives `FEAT-1`, `FEAT-2`. Refused with exit 3 with any other mode, and when given alone without `--tasks auto`. |
 | `--task-url` | (empty) | an `http://` or `https://` URL containing `{task}`, up to 500 characters | Template that turns a task into a link; `{task}` is replaced by the task ID. Allowed with every mode. |
-| `--task-pattern` | (empty; when no task flag is given the pattern is `^(?P<base>[A-Z]{2,5}-\d{1,4})(?:\.(?P<ext>\d{1,3}))?$`) | a regular expression with a named group `(?P<base>...)` and optionally `(?P<ext>...)`; at most 200 characters | The format every task ID must match. Given alone, it means `--tasks custom` with this pattern. |
+| `--task-pattern` | (empty; when no task flag is given the pattern is `^(?P<base>[A-Z]{2,5}-\d{1,4})(?:\.(?P<ext>\d{1,3}))?$`) | a regular expression with a named group `(?P<base>...)` and optionally `(?P<ext>...)`; at most 200 characters | The format every task ID must match. Given alone, it means `--tasks custom` with this pattern; it also goes with `--tasks custom`, and with no other mode (exit 2). An empty value is refused with exit 3. |
 | `--no-input` | `false` | | Do not ask questions even in a terminal. |
 
 ## Task numbering
@@ -57,8 +57,8 @@ Machine mode prints `(machine mode)` and the database path under the data direct
 
 - `0`: project created and registered.
 - `1`: runtime error: the name is already registered, the folder is already registered, the folder already holds a `.cairn` store, `--path` is not a folder, or a file cannot be written.
-- `2`: usage error: a positional argument was given, or `--tasks` was combined with `--task-pattern`.
-- `3`: invalid input: name, mode, repos, context, task mode, prefix, URL template or task pattern fails validation, including `--tasks custom` without `--task-pattern` and `--task-prefix` with a mode other than `auto`. Every bad field is listed on standard error.
+- `2`: usage error: a positional argument was given, or `--task-pattern` was combined with `--tasks auto`, `jira`, `linear` or `github`.
+- `3`: invalid input: name, mode, repos, context, task mode, prefix, URL template or task pattern fails validation, including `--tasks custom` without `--task-pattern` and `--task-prefix` with a mode other than `auto`. Every bad field is listed on standard error, task flags included.
 
 ## Examples
 
@@ -93,10 +93,16 @@ cairn init --name tidepool --repos server --tasks jira --task-url 'https://examp
 Creates a project that accepts Jira keys such as `PROJ-123` and can link them. Exit code 0.
 
 ```
+cairn init --name tidepool --repos server --tasks custom --task-pattern '^(?P<base>TP-\d{2})$'
+```
+
+Creates a project in mode `custom` with the given pattern; same as leaving out `--tasks`. Exit code 0.
+
+```
 cairn init --name tidepool --repos server --tasks jira --task-pattern '^TP-\d+$'
 ```
 
-Exit code 2: `--tasks` and `--task-pattern` cannot be combined.
+Exit code 2: `--task-pattern` only goes with `--tasks custom`.
 
 ```
 cairn init --name Tidepool --repos server

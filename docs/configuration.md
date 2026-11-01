@@ -1,6 +1,6 @@
 # Configuration
 
-A project has five configuration keys. They are set once by `cairn init`, stored in the `project` table, and never change afterward.
+A project has nine configuration keys. They are set once by `cairn init`, stored in the `project` table, and never change afterward.
 
 ## Keys
 
@@ -32,7 +32,7 @@ The flag `--path` sets the project root folder. It is not a configuration key.
 | `github` | `^(?P<base>#\d{1,7})(?:\.(?P<ext>\d{1,3}))?$` | `#128` |
 | `custom` | the pattern given with `--task-pattern` | any |
 
-`--tasks` cannot be combined with `--task-pattern` (exit 2); `--task-pattern` alone means `custom`.
+`--tasks custom` needs `--task-pattern` (exit 3 without it). `--task-pattern` alone means `custom`. `--task-pattern` with any other mode is a usage error (exit 2). `--task-prefix` only goes with `auto`.
 
 ## Task pattern
 

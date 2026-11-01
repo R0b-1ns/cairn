@@ -49,36 +49,54 @@ func defineInit(fs *flag.FlagSet) Handler {
 			p.DefaultRepo = p.Repos[0] // most projects have one repo: no need to name it every time
 		}
 		given := setFlags(fs)
+		var errs []validate.FieldError
 		legacy := false
 		switch {
-		case given["tasks"] && given["task-pattern"]:
-			return fail(c, ExitUsage, "--tasks and --task-pattern cannot be combined: --task-pattern alone means --tasks custom")
+		case given["tasks"] && given["task-pattern"] && taskMode != tasks.Custom:
+			return fail(c, ExitUsage, "--task-pattern only goes with --tasks custom (or alone, which means custom)")
 		case given["task-pattern"]:
 			taskMode = tasks.Custom
 		case !given["tasks"]:
 			taskMode, p.TaskPattern, legacy = tasks.Custom, model.DefaultTaskPattern, true
 		}
-		if tasks.Describe(taskMode) == "" {
-			return fail(c, ExitValidation, "unknown task mode %q: use one of %s", taskMode, strings.Join(tasks.Modes(), ", "))
-		}
-		if taskMode == tasks.Custom && given["tasks"] {
-			return fail(c, ExitValidation, "--tasks custom needs --task-pattern")
+		placeholder := false // a task flag error was recorded: skip the checks that would only repeat it
+		switch {
+		case tasks.Describe(taskMode) == "":
+			errs = append(errs, validate.FieldError{Field: "tasks", Message: fmt.Sprintf("unknown task mode %q: use one of %s", taskMode, strings.Join(tasks.Modes(), ", "))})
+			placeholder = true
+		case taskMode == tasks.Custom && given["tasks"] && !given["task-pattern"]:
+			errs = append(errs, validate.FieldError{Field: "tasks", Message: "--tasks custom needs --task-pattern"})
+			placeholder = true
+		case given["task-pattern"] && p.TaskPattern == "":
+			errs = append(errs, validate.FieldError{Field: "task_pattern", Message: "must not be empty; omit --task-pattern to get the default"})
+			placeholder = true
 		}
 		if taskMode != tasks.Auto && p.TaskPrefix != "" {
-			return fail(c, ExitValidation, "--task-prefix applies to the auto mode only")
-		}
-		p.TaskMode = taskMode
-		if taskMode == tasks.Auto && p.TaskPrefix == "" {
-			p.TaskPrefix = "T"
-		}
-		if taskMode != tasks.Custom {
-			pat, err := tasks.Pattern(taskMode, p.TaskPrefix)
-			if err != nil {
-				return fail(c, ExitValidation, "%v", err)
+			msg := "--task-prefix applies to the auto mode only"
+			if !given["tasks"] {
+				msg = "--task-prefix needs --tasks auto"
 			}
-			p.TaskPattern = pat
+			errs = append(errs, validate.FieldError{Field: "task_prefix", Message: msg})
+			p.TaskPrefix = ""
 		}
-		if errs := validate.Project(p); len(errs) != 0 {
+		if placeholder {
+			p.TaskPattern = model.DefaultTaskPattern
+		} else {
+			p.TaskMode = taskMode
+			if taskMode == tasks.Auto && p.TaskPrefix == "" {
+				p.TaskPrefix = "T"
+			}
+			if taskMode != tasks.Custom {
+				pat, err := tasks.Pattern(taskMode, p.TaskPrefix)
+				if err != nil {
+					// the prefix is reported by validate.Project below
+					pat = model.DefaultTaskPattern
+				}
+				p.TaskPattern = pat
+			}
+		}
+		errs = append(errs, validate.Project(p)...)
+		if len(errs) != 0 {
 			return reportFieldErrors(c, errs)
 		}
 		if path == "" {
