@@ -6,8 +6,8 @@ Rules that every note, addendum, entry and link follows. Read this before writin
 
 | Object | What it is | Storage table | ID prefix |
 |---|---|---|---|
-| project | The one configuration row: name, mode, context, repos, task pattern. Written once by `init`. | `project` (row id 1) | none |
-| note | One immutable work note: agent, repo, model, title, status, sections. | `notes` | `n-` |
+| project | The one configuration row: name, mode, context, repos, task pattern, and the keys `task_mode`, `task_prefix`, `task_url` (empty on projects from before schema version 4). Written once by `init`. | `project` (row id 1) | none |
+| note | One immutable work note: agent, repo, model, title, status, sections, author, branch, `ref`. | `notes` | `n-` |
 | addendum | One immutable addition to one note: may set a status, add entries, resolve open entries, supersede decisions, or carry a ticket link (`ref`). | `addenda` | `a-` |
 | entry | One typed piece of text. Belongs to exactly one note or exactly one addendum. | `entries` | `e-` |
 | link | A `resolves` or `supersedes` record from a note or addendum to one entry. | `links` | none |
@@ -59,6 +59,14 @@ Format: `<kind>-<6 characters>`.
 - cairn assigns IDs randomly. A new ID is checked against every note, addendum and entry ID.
 - Only `import` keeps IDs it is given. A given ID that already exists is refused.
 
+## Author, branch and ref
+
+- Notes and addenda carry `author_name`, `author_email`, `branch` and `ref`, all optional and empty by default.
+- cairn sets the author (from `--author`, `CAIRN_AUTHOR`, then git) and the branch (from `--branch`, then the current git branch) at write time. `ref` is a ticket URL and is only ever given by the writer.
+- They are immutable like everything else. To correct or add one, write an addendum (`amend --ref` links a ticket later).
+- A task's refs are those of every note and addendum with the same task base. A ref given for `T-7.1` therefore also belongs to `T-7`.
+- Limits and formats: see `limits.md`.
+
 ## Timestamps
 
 - `at` on a note or addendum is set by cairn at write time, in UTC, to whole seconds: `2026-10-30T10:00:00Z`.
@@ -74,6 +82,7 @@ Format: `<kind>-<6 characters>`.
 - Commands that take a task: `brief`, `list --task`, `check --done`, `export --task`. Each one follows the base and extension rule.
 - `check` counts extension notes toward their base. Its "latest note" is the most recent note of the base, by the note's own `at`.
 - A note with no task is its own subject in `recent`.
+- In `auto` mode, `add --new-task` assigns the next number: the highest number used with the project's prefix, over all notes (an extension such as `T-9.1` counts as `T-9`), plus one. Numbers are never reused. The first is `T-1`.
 
 ## Links: resolves and supersedes
 

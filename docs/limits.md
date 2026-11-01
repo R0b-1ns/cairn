@@ -25,6 +25,7 @@ Reads stop at the limit plus one byte, so an oversized input is never held in me
 | `author_email` | 120 | characters | no | one line |
 | `branch` | 200 | characters | no | one line |
 | `ref` | 500 | characters | no | one line, starts with `http://` or `https://` |
+| task URL template (`task_url`) | 500 | characters | no | one line, starts with `http://` or `https://`, contains `{task}` |
 | `task_pattern` | 200 | **bytes** | (set by `init`) | a regular expression |
 | project `name` | 40 | characters | yes | must match `^[a-z0-9][a-z0-9_-]{0,39}$` |
 | repo (in `repos`) | 40 | characters | yes, at least one repo | must match `^[a-z0-9][a-z0-9._-]{0,39}$` |
@@ -74,7 +75,7 @@ Refused in every text field, single-line or multi-line:
 - U+2028 (line separator) and U+2029 (paragraph separator),
 - any byte sequence that is not valid UTF-8.
 
-Exception: **newline (U+000A) and tab (U+0009) are allowed only in project `context` and in entry `text`.** In `title`, `agent`, `model`, `task`, names and repos they are refused.
+Exception: **newline (U+000A) and tab (U+0009) are allowed only in project `context` and in entry `text`.** In `title`, `agent`, `model`, `task`, `author_name`, `author_email`, `branch`, `ref`, the task URL template, names and repos they are refused.
 
 CRLF: see `note-json.md`.
 
@@ -91,7 +92,7 @@ cairn scans for six patterns. A match prints a warning and does **not** stop the
 | `jwt` | `eyJ`, then three segments of 8 or more URL-safe characters, separated by dots. |
 | `credential-assignment` | (case-insensitive) `password`, `passwd`, `secret`, `token`, `api_key`, `api-key` or `apikey`, optional quote, optional spaces, `:` or `=`, optional spaces or quote, then 8 or more characters that are not whitespace or quotes. |
 
-Scanned fields: `title` and each entry `text`, on `add`, `amend` and `import`. Other fields (`agent`, `task`, `context`, and so on) are not scanned.
+Scanned fields: `title` and each entry `text`, on `add`, `amend` and `import`. Other fields (`agent`, `task`, `author_name`, `ref`, `context`, and so on) are not scanned.
 
 Warning format on standard error:
 

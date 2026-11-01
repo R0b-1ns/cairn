@@ -206,3 +206,32 @@ func TestDocsStateTheCorrectedFacts(t *testing.T) {
 	lacks("output.md", "indented 6 spaces.")
 	has("commands/brief.md", "TP-03: 2 note(s)")
 }
+
+func TestGuideTellsAgentsToAskForNumbering(t *testing.T) {
+	guide := readDoc(t, "guide.md")
+	for _, want := range []string{"ask your user", "--tasks", "--task-prefix", "--new-task", "T-1"} {
+		if !strings.Contains(guide, want) {
+			t.Errorf("docs/guide.md does not contain %q", want)
+		}
+	}
+}
+
+func TestREADMEInitExamplesNameTheirMode(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(repoRoot, "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, line := range strings.Split(string(b), "\n") {
+		if !strings.Contains(line, "cairn init") {
+			continue
+		}
+		found = true
+		if !strings.Contains(line, "--tasks") && !strings.Contains(line, "--task-pattern") {
+			t.Errorf("README init example does not name its numbering mode: %q", line)
+		}
+	}
+	if !found {
+		t.Error("README.md has no cairn init example")
+	}
+}
