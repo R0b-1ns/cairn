@@ -90,7 +90,7 @@ func TestBriefShowsAllRefsNewestFirst(t *testing.T) {
 	if !strings.Contains(out, want) {
 		t.Errorf("want %q in:\n%s", want, out)
 	}
-	if !strings.Contains(out, "(server, builder) by Ada <ada@x.org> on main\n") {
+	if !strings.Contains(out, "(server, builder) by Ada on main\n") {
 		t.Errorf("note line lacks origin:\n%s", out)
 	}
 }
@@ -308,7 +308,22 @@ func TestBriefOriginWithEmailOnly(t *testing.T) {
 	e.initProject()
 	setClock(t, "2026-10-30T10:00:00Z")
 	originNote(t, e, "TP-03", "--author", "<ada@x.org>", "--branch", "main")
-	if out := e.mustRun("brief", "TP-03").out; !strings.Contains(out, "(server, builder) by <ada@x.org> on main\n") {
+	if out := e.mustRun("brief", "TP-03").out; !strings.Contains(out, "(server, builder) by ada@x.org on main\n") {
 		t.Errorf("brief:\n%s", out)
+	}
+}
+
+func TestBriefOriginNeverShowsEmailNextToName(t *testing.T) {
+	cases := []struct{ name, email, branch, want string }{
+		{"Ada", "ada@x.org", "main", "by Ada on main"},
+		{"", "ada@x.org", "main", "by ada@x.org on main"},
+		{"Ada", "ada@x.org", "", "by Ada"},
+		{"", "", "main", "on main"},
+		{"", "", "", ""},
+	}
+	for _, c := range cases {
+		if got := briefOrigin(c.name, c.email, c.branch); got != c.want {
+			t.Errorf("briefOrigin(%q, %q, %q) = %q, want %q", c.name, c.email, c.branch, got, c.want)
+		}
 	}
 }

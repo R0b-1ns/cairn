@@ -128,7 +128,7 @@ func defineBrief(fs *flag.FlagSet) Handler {
 			}
 			line := fmt.Sprintf("  %s  %-8s %-11s %s  %s (%s, %s)", h.ID, task, h.Status, day(h.At),
 				clip(sanitize(h.Title), textWidth), sanitize(h.Repo), sanitize(h.Agent))
-			if o := originLine(h.AuthorName, h.AuthorEmail, h.Branch); o != "" {
+			if o := briefOrigin(h.AuthorName, h.AuthorEmail, h.Branch); o != "" {
 				line += " " + o
 			}
 			lines = append(lines, line)

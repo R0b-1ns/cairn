@@ -65,6 +65,24 @@ func originLine(name, email, branch string) string {
 	return strings.Join(parts, " ")
 }
 
+// briefOrigin is the compact origin of a brief line, to spare the agent's
+// tokens: "by Name on branch", or "by email on branch" when there is no name.
+// The email is never printed next to a name. Empty parts are left out.
+func briefOrigin(name, email, branch string) string {
+	who := name
+	if who == "" {
+		who = email
+	}
+	var parts []string
+	if who != "" {
+		parts = append(parts, "by "+sanitize(who))
+	}
+	if branch != "" {
+		parts = append(parts, "on "+sanitize(branch))
+	}
+	return strings.Join(parts, " ")
+}
+
 // noteRefs lists the refs to print for a note: its own first, then the other
 // refs of its task (newest first), or those of its addenda when it has no task.
 // With no stored ref anywhere it falls back to the project's link template.

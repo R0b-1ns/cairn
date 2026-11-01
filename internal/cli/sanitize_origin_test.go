@@ -82,7 +82,7 @@ func TestOriginAndRefsAreSanitized(t *testing.T) {
 
 	brief := e.mustRun("brief", "TP-1").out
 	assertClean(t, "brief", brief)
-	for _, want := range []string{"refs: " + sanitize(ref) + "\n", " " + origin + "\n"} {
+	for _, want := range []string{"refs: " + sanitize(ref) + "\n", " by " + sanitize(name) + " on " + sanitize(branch) + "\n"} {
 		if !strings.Contains(brief, want) {
 			t.Errorf("brief lacks %q:\n%s", want, brief)
 		}

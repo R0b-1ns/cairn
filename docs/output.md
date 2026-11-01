@@ -87,7 +87,7 @@ With no matches: `no entries`. If more match than `--max` allows: `... 12 more (
 TP-03: 2 note(s)
 refs: https://tracker.example.org/browse/TP-03
 notes:
-  n-4k7q2m  TP-03    done        2026-10-30  Add tidal index (server, builder) by Ada <ada@example.org> on feat/tidal-index
+  n-4k7q2m  TP-03    done        2026-10-30  Add tidal index (server, builder) by Ada on feat/tidal-index
   n-8c2e6t  TP-03.1  in_progress 2026-10-31  Tidal index follow-up (client, builder)
 changes:
   e-7h2m9q  Added the hourly tidal index table.  (n-4k7q2m)
@@ -97,7 +97,7 @@ open points:
   e-5w4n8p  Should old buckets be pruned after 90 days?  (n-4k7q2m)
 ```
 
-- The header is `<task>: <count> note(s)`. Notes are listed oldest first: ID, task, status (padded to 11), date, title, then `(repo, agent)`, then the origin ` by Name <email> on branch` when the note has an author or a branch, with the empty parts left out, as in `show`.
+- The header is `<task>: <count> note(s)`. Notes are listed oldest first: ID, task, status (padded to 11), date, title, then `(repo, agent)`, then a compact origin ` by Name on branch` (the name, or the email when there is no name, never both; unlike `show`, which also prints the email), with the empty parts left out, when the note has an author or a branch.
 - `refs: <url>, <url>` comes right after the header: all refs of the task, newest first, or the link computed from the project's ticket URL when none is stored; the line is omitted when there is neither.
 - Then three sections: `changes:`, `decisions in force:`, `open points:`. Entries are listed oldest first. Each shows ID, text, and the note (`(<n-id>)`, or `(<n-id> via <a-id>)`).
 - An empty section prints `  none`.
