@@ -390,3 +390,135 @@ func TestUnreadableAncestorSkipped(t *testing.T) {
 		t.Errorf("Find returned an empty Location without error")
 	}
 }
+
+// registerProject registers a project-mode project and stubs its database.
+func registerProject(t *testing.T, reg *registry.Registry, name, path string) {
+	t.Helper()
+	stubDB(t, path)
+	if err := reg.Register(registry.Entry{Name: name, Mode: "project", Path: path}); err != nil {
+		t.Fatalf("Register %s: %v", name, err)
+	}
+}
+
+func TestFindFollowsAttachedPointer(t *testing.T) {
+	base := tempBase(t)
+	reg := newReg(base)
+	parent := filepath.Join(base, "P")
+	registerProject(t, reg, "shop", parent)
+	child := filepath.Join(base, "C")
+	mkdirAll(t, filepath.Join(child, "sub"))
+	if err := WritePointer(child, Pointer{Parent: "shop", ParentID: "p-0123456789", Repo: "web"}); err != nil {
+		t.Fatal(err)
+	}
+	loc, err := Find(filepath.Join(child, "sub"), "", reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !loc.Attached || loc.Repo != "web" || loc.ChildRoot != child {
+		t.Fatalf("attached fields wrong: %+v", loc)
+	}
+	if loc.Name != "shop" || loc.Mode != "project" || loc.Root != parent || loc.DBPath != filepath.Join(parent, ".cairn", "cairn.db") {
+		t.Fatalf("must resolve to the parent: %+v", loc)
+	}
+}
+
+func TestFindDatabaseWinsOverPointer(t *testing.T) {
+	base := tempBase(t)
+	reg := newReg(base)
+	registerProject(t, reg, "shop", filepath.Join(base, "P"))
+	child := filepath.Join(base, "C")
+	stubDB(t, child)
+	if err := WritePointer(child, Pointer{Parent: "shop", Repo: "web"}); err != nil {
+		t.Fatal(err)
+	}
+	loc, err := Find(child, "", reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loc.Attached || loc.Root != child {
+		t.Fatalf("own database must win: %+v", loc)
+	}
+}
+
+func TestFindAttachedParentNotRegistered(t *testing.T) {
+	base := tempBase(t)
+	child := filepath.Join(base, "C")
+	mkdirAll(t, child)
+	if err := WritePointer(child, Pointer{Parent: "ghost", Repo: "web"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Find(child, "", newReg(base))
+	if !errors.Is(err, ErrNoProject) || !strings.Contains(err.Error(), "cairn project add") {
+		t.Fatalf("want ErrNoProject naming cairn project add, got %v", err)
+	}
+}
+
+func TestPointerRefusesSymlinkAndWorldWritable(t *testing.T) {
+	base := tempBase(t)
+	reg := newReg(base)
+	registerProject(t, reg, "shop", filepath.Join(base, "P"))
+
+	sym := filepath.Join(base, "S")
+	mkdirAll(t, filepath.Join(sym, ".cairn"))
+	real := filepath.Join(base, "real.json")
+	if err := os.WriteFile(real, []byte(`{"parent":"shop","repo":"web"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, filepath.Join(sym, ".cairn", "links.json")); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := ReadPointer(sym); err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("want symlink error, got %v", err)
+	}
+	if _, err := Find(sym, "", reg); err == nil || errors.Is(err, ErrNoProject) {
+		t.Fatalf("Find must surface the symlink error, got %v", err)
+	}
+
+	ww := filepath.Join(base, "W")
+	if err := WritePointer(ww, Pointer{Parent: "shop", Repo: "web"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(filepath.Join(ww, ".cairn", "links.json"), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := ReadPointer(ww); err == nil || !strings.Contains(err.Error(), "writable") {
+		t.Fatalf("want world-writable error, got %v", err)
+	}
+	if _, err := Find(ww, "", reg); err == nil || errors.Is(err, ErrNoProject) {
+		t.Fatalf("Find must surface the world-writable error, got %v", err)
+	}
+}
+
+func TestPointerRoundTrip(t *testing.T) {
+	base := tempBase(t)
+	root := filepath.Join(base, "C")
+	mkdirAll(t, root)
+	want := Pointer{Parent: "shop", ParentID: "p-0123456789", Repo: "web"}
+	if _, found, err := ReadPointer(root); err != nil || found {
+		t.Fatalf("absent pointer: found=%v err=%v", found, err)
+	}
+	if err := WritePointer(root, want); err != nil {
+		t.Fatal(err)
+	}
+	if err := WritePointer(root, want); err != nil {
+		t.Fatalf("replace: %v", err)
+	}
+	got, found, err := ReadPointer(root)
+	if err != nil || !found || got != want {
+		t.Fatalf("got %+v found=%v err=%v", got, found, err)
+	}
+	fi, _ := os.Stat(filepath.Join(root, ".cairn", "links.json"))
+	if fi.Mode().Perm() != 0o600 {
+		t.Fatalf("file mode %v", fi.Mode().Perm())
+	}
+	di, _ := os.Stat(filepath.Join(root, ".cairn"))
+	if di.Mode().Perm() != 0o700 {
+		t.Fatalf("dir mode %v", di.Mode().Perm())
+	}
+	if err := RemovePointer(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := ReadPointer(root); err != nil || found {
+		t.Fatalf("after remove: found=%v err=%v", found, err)
+	}
+}
