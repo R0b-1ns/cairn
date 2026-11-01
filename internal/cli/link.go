@@ -30,7 +30,7 @@ func parentSession(c *Ctx, projectFlag string) (*session, store.LinkState, int) 
 	}
 	if s.Loc.Name == "" {
 		s.Close()
-		return nil, store.LinkState{}, fail(c, ExitRuntime, "project at %s is not registered on this machine; run: cairn project add %s", sanitize(s.Loc.Root), sanitize(s.Loc.Root))
+		return nil, store.LinkState{}, fail(c, ExitRuntime, "project at %s is not registered on this machine; run: cairn project add %s", sanitize(s.Loc.Root), locate.ShellQuote(sanitize(s.Loc.Root)))
 	}
 	pl, err := s.St.Links()
 	if err != nil {

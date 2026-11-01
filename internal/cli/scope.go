@@ -56,10 +56,14 @@ func openScope(c *Ctx, s *session) *scope {
 			continue
 		}
 		path := paths[ch.Name]
-		st, why := openChild(path, parent, pl.ID, ch.Name)
+		st, why, outdated := openChild(path, parent, pl.ID, ch.Name)
 		if st == nil {
 			sc.Missing = append(sc.Missing, ch.Name)
-			warnf(c, "%s", missingChild(parent, ch.Name, path, why))
+			if outdated {
+				warnf(c, "%s", outdatedChild(parent, ch.Name, why))
+			} else {
+				warnf(c, "%s", missingChild(parent, ch.Name, path, why))
+			}
 			continue
 		}
 		p, err := st.Project()
@@ -75,43 +79,51 @@ func openScope(c *Ctx, s *session) *scope {
 }
 
 // openChild opens a child database read-only in effect and checks that it
-// really is that child of this parent. It returns a reason when it cannot.
-func openChild(path, parent, parentID, name string) (*store.Store, string) {
+// really is that child of this parent. It returns a reason when it cannot;
+// outdated marks a child whose schema is older than this build.
+func openChild(path, parent, parentID, name string) (st *store.Store, why string, outdated bool) {
 	if path == "" {
-		return nil, "its folder is not known on this machine"
+		return nil, "its folder is not known on this machine", false
 	}
 	db, found, err := locate.CheckStore(path)
 	if err != nil {
-		return nil, sanitize(err.Error())
+		return nil, sanitize(err.Error()), false
 	}
 	if !found {
-		return nil, "no cairn database there"
+		return nil, "no cairn database there", false
 	}
-	st, err := store.OpenCurrent(db)
+	st, err = store.OpenCurrent(db)
 	if err != nil {
 		var nm *store.NeedsMigrationError
 		if errors.As(err, &nm) {
-			return nil, fmt.Sprintf("its database has schema version %d, older than this build; run `cairn --project %s context` from that repo once to upgrade it", nm.Version, sanitize(name))
+			return nil, fmt.Sprintf("its database has schema version %d, older than this build", nm.Version), true
 		}
-		return nil, sanitize(err.Error())
+		return nil, sanitize(err.Error()), false
 	}
 	cl, err := st.Links()
 	if err != nil {
 		st.Close()
-		return nil, sanitize(err.Error())
+		return nil, sanitize(err.Error()), false
 	}
 	if cl.Parent == nil || cl.Parent.Name != parent || cl.Parent.ID != parentID || parentID == "" {
 		st.Close()
-		return nil, "that folder holds a different project"
+		return nil, "that folder holds a different project", false
 	}
-	return st, ""
+	return st, "", false
+}
+
+// outdatedChild words the warning for a child on an older schema: the fix is
+// to open it once from its own repo, not to link it again.
+func outdatedChild(parent, name, why string) string {
+	return fmt.Sprintf("local child %s of %s was not read: %s; run once to upgrade it: cairn context --project %s",
+		sanitize(name), sanitize(parent), why, sanitize(name))
 }
 
 func missingChild(parent, name, path, why string) string {
-	p := path
-	if p == "" {
-		p = "<path>"
+	p := "<path>"
+	if path != "" {
+		p = locate.ShellQuote(sanitize(path))
 	}
 	return fmt.Sprintf("local child %s of %s was not read: %s; to point to it, run: cairn project link --project %s %s %s",
-		sanitize(name), sanitize(parent), why, sanitize(parent), sanitize(name), sanitize(p))
+		sanitize(name), sanitize(parent), why, sanitize(parent), sanitize(name), p)
 }

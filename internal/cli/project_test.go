@@ -611,7 +611,7 @@ func TestPointerParentIDMismatchRefused(t *testing.T) {
 	stray := realTemp(t)
 	locate.WritePointer(stray, locate.Pointer{Parent: "tidepool", Repo: "web"})
 	r = e.runIn(stray, "", "context")
-	if r.code == 0 || !strings.Contains(r.err, "cairn project link --project tidepool web "+stray) {
+	if r.code == 0 || !strings.Contains(r.err, "cairn project link --project tidepool web "+locate.ShellQuote(stray)) {
 		t.Fatalf("stray: %+v", r)
 	}
 }

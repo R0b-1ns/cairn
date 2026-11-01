@@ -213,3 +213,4 @@ Never asks, even in a terminal; on purpose, no task flag is given, so it uses th
 - The legacy default task pattern accepts `TP-03`, `TP-03.1` and `ABCDE-1234`. Choose `--tasks` or pass `--task-pattern` when the task IDs differ.
 - `.cairn/` in project mode lives inside the folder; `machine` mode keeps the folder clean.
 - A project name or folder that is already registered is refused with exit code 1; `cairn projects` lists them.
+- A plain `init` in a folder that still holds `.cairn/links.json` (an attached child) is refused with exit code 1; run `cairn project unlink` inside the folder first. `init --project NAME --repo R --local` is refused as nesting when the database it would adopt already has active children.

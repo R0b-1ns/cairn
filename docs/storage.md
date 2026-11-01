@@ -142,7 +142,7 @@ Version 5 records how a project is linked to other repos in `link_events`, an ap
 
 ### Reading a child database
 
-A parent reads the databases of its local children, read-only, through a variant of open that makes every check of a normal open but never migrates, never writes a backup and never writes at all. A child on an older schema counts as missing: the parent skips it with a warning that tells you to run any cairn command inside that repo (for example `cairn --project <child> context`), which migrates it there. A parent never writes to or migrates a child database.
+A parent reads the databases of its local children, read-only, through a variant of open that makes every check of a normal open but never migrates, never writes a backup and never writes at all. A child on an older schema counts as missing: the parent skips it with a warning that tells you to run any cairn command inside that repo (for example `cairn context --project <child>`), which migrates it there. A parent never writes to or migrates a child database.
 
 ### The attached-child pointer
 

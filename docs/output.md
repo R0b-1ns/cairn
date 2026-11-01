@@ -120,7 +120,7 @@ n-4k7q2m  title    Add tidal index  (n-4k7q2m)
 e-7h2m9q  change   Added the hourly tidal index table.  (n-4k7q2m)
 ```
 
-Columns: ID, kind (`title` for a note title, otherwise the entry type; padded to 8), the matching snippet clipped to 160 characters, then the note, plus `via <a-id>` for addendum entries. Best match first. With none: `no matches`.
+A hit from a local child ends with `  [<child>]`. Columns: ID, kind (`title` for a note title, otherwise the entry type; padded to 8), the matching snippet clipped to 160 characters, then the note, plus `via <a-id>` for addendum entries. Best match first. With none: `no matches`.
 
 ### check
 
@@ -168,12 +168,12 @@ Every command that lists or shows data accepts `--json`, which prints indented J
 |---|---|
 | `add` | The stored note: `id`, `agent`, `repo`, `at`, `task`, `model`, `title`, `status`, `entries` (with IDs), and `none`, `impacts`, `commits`, `resolves`, `supersedes` when set. |
 | `amend` | The stored addendum: `id`, `note_id`, `agent`, `model`, `at`, `status` when set, `entries`, `resolves`, `supersedes`. |
-| `show <n-id>` | The note, plus `current_status`, `addenda` (an array, possibly empty) and `refs` (the links of the `ref:` lines; omitted when empty). |
+| `show <n-id>` | The note, plus `child` (the local child it came from; omitted for the current project), `current_status`, `addenda` (an array, possibly empty) and `refs` (the links of the `ref:` lines; omitted when empty). |
 | `show <a-id>` | The addendum. |
 | `show <e-id>` | One entry object (see below). |
-| `list` | An array of entry objects. |
-| `search` | An array of hits: `kind`, `id`, `note_id`, `addendum_id`, `type`, `snippet`. |
-| `brief` | An object: `task`, `notes` (headers), `changes`, `decisions`, `open`, and `refs` (the links of the `refs:` line; omitted when empty). Not capped by `--max`. |
+| `list` | An array of entry objects (each with `child` when it came from a local child). |
+| `search` | An array of hits: `kind`, `id`, `note_id`, `addendum_id`, `type`, `snippet`, and `child` when the hit came from a local child. |
+| `brief` | An object: `task`, `notes` (headers), `changes`, `decisions`, `open`, and `refs` (the links of the `refs:` line; omitted when empty); notes and entries from a local child carry `child`. Not capped by `--max`. |
 | `recent` | An array: `subject`, `last_at`, `status`, `title`, `note_id`, `notes`. |
 | `check` | An object: `missing_notes`, `not_done`, `old_open`, `ok`. |
 | `context` | The project object: `name`, `mode`, `context`, `repos`, `default_repo`, `task_pattern`, and, when set, `task_mode`, `task_prefix`, `task_url`. |
@@ -225,3 +225,7 @@ Every write to standard output or standard error passes through one sanitizer, s
 - JSON output is not changed in practice: the JSON encoder already writes control characters and U+2028/U+2029 as escapes.
 
 Stored text cannot contain these characters to begin with (see `limits.md`), so the sanitizer is a second line of defense for data written by other tools.
+
+### Results from local children
+
+When the project has local children, `search`, `list`, `show` and `brief` also read them. A result from a child is marked in text by a `  [<child>]` label after the ID (and `show` prints a `child: <name>` line), and in JSON by the key `child`. Results from the current project have no label and no `child` key.

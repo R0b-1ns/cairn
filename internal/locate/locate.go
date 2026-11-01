@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/R0b-1ns/cairn/internal/ids"
@@ -110,6 +112,9 @@ type Pointer struct {
 	Repo     string `json:"repo"`
 }
 
+// maxPointerSize bounds how much of a pointer file is read.
+const maxPointerSize = 4096
+
 func pointerPaths(root string) (dir, file string) {
 	dir = filepath.Join(root, ".cairn")
 	return dir, filepath.Join(dir, "links.json")
@@ -146,9 +151,17 @@ func ReadPointer(root string) (p Pointer, found bool, err error) {
 	if err := checkTrusted(file, fi); err != nil {
 		return Pointer{}, false, err
 	}
-	data, err := os.ReadFile(file)
+	f, err := os.Open(file)
 	if err != nil {
 		return Pointer{}, false, err
+	}
+	data, err := io.ReadAll(io.LimitReader(f, maxPointerSize+1))
+	f.Close()
+	if err != nil {
+		return Pointer{}, false, err
+	}
+	if len(data) > maxPointerSize {
+		return Pointer{}, false, fmt.Errorf("%s: pointer file too large (more than %d bytes)", file, maxPointerSize)
 	}
 	if err := json.Unmarshal(data, &p); err != nil {
 		return Pointer{}, false, fmt.Errorf("%s is malformed: %w", file, err)
@@ -249,19 +262,19 @@ func fromEntry(reg *registry.Registry, e registry.Entry) (Location, error) {
 func fromPointer(reg *registry.Registry, childRoot string, p Pointer) (Location, error) {
 	e, err := reg.Get(p.Parent)
 	if errors.Is(err, registry.ErrNotFound) {
-		return Location{}, fmt.Errorf("%w: the parent project %q of the repo %q is not registered; run `cairn project add <path>` for it", ErrNoProject, p.Parent, p.Repo)
+		return Location{}, &pointerError{fmt.Sprintf("%v: the parent project %q of the repo %q is not registered; run `cairn project add <path>` for it", ErrNoProject, p.Parent, p.Repo)}
 	}
 	if err != nil {
 		return Location{}, err
 	}
 	linked, ok := e.Children[p.Repo]
 	if !ok || !samePath(linked, childRoot) {
-		return Location{}, fmt.Errorf("%w: the folder %s points to project %q as repo %q, but that project has no such child at this path; if you trust it, run: cairn project link --project %s %s %s",
-			ErrNoProject, childRoot, p.Parent, p.Repo, p.Parent, p.Repo, childRoot)
+		return Location{}, &pointerError{fmt.Sprintf("%v: the folder %s points to project %q as repo %q, but that project has no such child at this path; if you trust it, run: cairn project link --project %s %s %s",
+			ErrNoProject, childRoot, p.Parent, p.Repo, p.Parent, p.Repo, ShellQuote(childRoot))}
 	}
 	if p.ParentID != "" && e.ID != "" && p.ParentID != e.ID {
-		return Location{}, fmt.Errorf("%w: the pointer in %s belongs to another project also named %q (id %q, the registered one is %q); to detach this folder, run from it: cairn project unlink",
-			ErrNoProject, childRoot, p.Parent, p.ParentID, e.ID)
+		return Location{}, &pointerError{fmt.Sprintf("%v: the pointer in %s belongs to another project also named %q (id %q, the registered one is %q); to detach this folder, run from it: cairn project unlink",
+			ErrNoProject, childRoot, p.Parent, p.ParentID, e.ID)}
 	}
 	loc, err := fromEntry(reg, e)
 	if err != nil {
@@ -329,4 +342,23 @@ func Find(cwd, name string, reg *registry.Registry) (Location, error) {
 		return Location{}, listErr
 	}
 	return Location{}, fmt.Errorf("%w from %s", ErrNoProject, cwd)
+}
+
+// ShellQuote quotes s for a POSIX shell: single quotes, with each embedded
+// single quote written as '\''.
+func ShellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// pointerError is a failure to resolve an attached child's pointer. It matches
+// ErrNoProject, and its message already names the command that fixes it.
+type pointerError struct{ msg string }
+
+func (e *pointerError) Error() string        { return e.msg }
+func (e *pointerError) Is(target error) bool { return target == ErrNoProject }
+
+// IsPointerError reports whether err comes from an unresolvable pointer folder.
+func IsPointerError(err error) bool {
+	var pe *pointerError
+	return errors.As(err, &pe)
 }

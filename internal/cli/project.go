@@ -152,6 +152,11 @@ func defineInit(fs *flag.FlagSet) Handler {
 				return fail(c, ExitRuntime, "project %q is already registered for %s", e.Name, root)
 			}
 		}
+		if _, found, err := locate.ReadPointer(root); err != nil {
+			return fail(c, ExitRuntime, "%s", sanitize(err.Error()))
+		} else if found {
+			return fail(c, ExitRuntime, "%s still holds a pointer to a parent project (.cairn/links.json); run inside it first: cairn project unlink", sanitize(root))
+		}
 		var dbPath string
 		if p.Mode == model.ModeProject {
 			existing, found, err := locate.CheckStore(root)

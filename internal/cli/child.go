@@ -322,6 +322,9 @@ func adoptableDatabase(c *Ctx, db, name, repo string) (*store.Store, int) {
 	if err != nil {
 		return refuse("%s", sanitize(err.Error()))
 	}
+	if len(cl.Children) != 0 {
+		return refuse("it is already the parent project %s; nesting is not supported", sanitize(cp.Name))
+	}
 	if cl.Parent != nil {
 		return refuse("it is already a child of project %s; unlink it first", sanitize(cl.Parent.Name))
 	}

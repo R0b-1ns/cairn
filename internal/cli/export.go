@@ -173,7 +173,13 @@ func writeNew(path, body string, force bool) error {
 
 // collectExport reads the notes and addenda of one source.
 func collectExport(src source, nf store.NoteFilter) (exportDoc, error) {
-	doc := exportDoc{Format: exportFormat, Version: exportVersion, Project: src.Proj, Notes: []model.Note{}, Addenda: []model.Addendum{}}
+	// The document carries the stored project: an attached child's in-memory
+	// default repo must not leak into an export that has to stay importable.
+	proj, err := src.St.Project()
+	if err != nil {
+		return exportDoc{}, err
+	}
+	doc := exportDoc{Format: exportFormat, Version: exportVersion, Project: proj, Notes: []model.Note{}, Addenda: []model.Addendum{}}
 	hs, err := src.St.NoteHeaders(nf)
 	if err != nil {
 		return doc, err

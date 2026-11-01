@@ -84,7 +84,7 @@ func TestProjectLinkRecordsPath(t *testing.T) {
 		if !local {
 			// Before linking, the unlinked attached child is refused with the exact advice.
 			r := m.runIn(f.child, "", "context")
-			want := "cairn project link --project tidepool web " + f.child
+			want := "cairn project link --project tidepool web " + locate.ShellQuote(f.child)
 			if r.code != 4 || !strings.Contains(r.err, want) {
 				t.Fatalf("before link: exit %d, want 4 with %q\n%s", r.code, want, r.err)
 			}
@@ -300,7 +300,7 @@ func TestUnlinkWithoutChildPath(t *testing.T) {
 	}
 	// The child's later commands name the fix and do not crash.
 	r = m.runIn(f.child, "", "context")
-	if want := "cairn project link --project tidepool web " + f.child; r.code != 4 || !strings.Contains(r.err, want) {
+	if want := "cairn project link --project tidepool web " + locate.ShellQuote(f.child); r.code != 4 || !strings.Contains(r.err, want) {
 		t.Errorf("later command: %d %q", r.code, r.err)
 	}
 }

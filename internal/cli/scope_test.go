@@ -137,7 +137,7 @@ func TestScopeSkipsOutdatedChild(t *testing.T) {
 	if len(sc.Sources) != 2 || sc.Sources[1].Child != "api" {
 		t.Fatalf("api not read: %+v", sc.Sources)
 	}
-	if !strings.Contains(warn, "web") || !strings.Contains(warn, "cairn --project web context") || !strings.HasPrefix(warn, "cairn: warning") {
+	if !strings.Contains(warn, "web") || !strings.Contains(warn, "cairn context --project web") || !strings.HasPrefix(warn, "cairn: warning") {
 		t.Errorf("warning %q", warn)
 	}
 	after, _ := os.ReadFile(db)

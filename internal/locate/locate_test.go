@@ -435,7 +435,7 @@ func TestFindAttachedRequiresLinkedPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := Find(child, "", reg)
-	if !errors.Is(err, ErrNoProject) || !strings.Contains(err.Error(), "cairn project link --project shop web "+child) {
+	if !errors.Is(err, ErrNoProject) || !strings.Contains(err.Error(), "cairn project link --project shop web "+ShellQuote(child)) {
 		t.Fatalf("want link command, got %v", err)
 	}
 	other := filepath.Join(base, "D")

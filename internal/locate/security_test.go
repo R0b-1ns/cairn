@@ -117,3 +117,23 @@ func TestProjectNameChecksSymlinkedStore(t *testing.T) {
 		t.Fatalf("want ErrNoProject, got %v", err)
 	}
 }
+
+func TestReadPointerRefusesLargeFile(t *testing.T) {
+	root := t.TempDir()
+	if err := WritePointer(root, Pointer{Parent: "shop", Repo: "web"}); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(root, ".cairn", "links.json")
+	big := append([]byte(`{"parent":"shop","repo":"web","x":"`), make([]byte, 8192)...)
+	for i := range big[35:] {
+		big[35+i] = 'a'
+	}
+	big = append(big, []byte(`"}`)...)
+	if err := os.WriteFile(file, big, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := ReadPointer(root)
+	if err == nil || !strings.Contains(err.Error(), "pointer file too large") {
+		t.Fatalf("err = %v", err)
+	}
+}

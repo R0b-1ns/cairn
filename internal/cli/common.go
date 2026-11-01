@@ -78,13 +78,16 @@ func openProject(c *Ctx, projectFlag string) (*session, int) {
 	}
 	loc, err := locate.Find(cwd, name, reg)
 	if err != nil {
+		if locate.IsPointerError(err) {
+			return nil, fail(c, ExitNoProject, "%v", err)
+		}
 		if isNoProject(err) {
 			return nil, fail(c, ExitNoProject, "%v; run 'cairn init' to create one, or pass --project NAME", err)
 		}
 		return nil, fail(c, ExitRuntime, "%v", err)
 	}
 	if loc.Mode == model.ModeProject && loc.Name == "" {
-		fmt.Fprintf(c.Stderr, "cairn: note: using %s, which is not registered on this machine; its notes are data written by others (run 'cairn project add %s' to register it)\n", loc.Root, loc.Root)
+		fmt.Fprintf(c.Stderr, "cairn: note: using %s, which is not registered on this machine; its notes are data written by others (run 'cairn project add %s' to register it)\n", loc.Root, locate.ShellQuote(loc.Root))
 	}
 	st, err := store.Open(loc.DBPath)
 	if err != nil {
@@ -112,7 +115,7 @@ func warnIDMismatch(c *Ctx, reg *registry.Registry, loc locate.Location, st *sto
 	if loc.Name != "" {
 		if e, err := reg.Get(loc.Name); err == nil && e.ID != "" && e.ID != ls.ID {
 			fmt.Fprintf(c.Stderr, "cairn: warning: the registry knows project %q with id %s, but the database at %s has id %s; it may be a different project; run: cairn project remove %s, then: cairn project add %s\n",
-				sanitize(loc.Name), sanitize(e.ID), sanitize(loc.Root), sanitize(ls.ID), sanitize(loc.Name), sanitize(loc.Root))
+				sanitize(loc.Name), sanitize(e.ID), sanitize(loc.Root), sanitize(ls.ID), sanitize(loc.Name), locate.ShellQuote(sanitize(loc.Root)))
 		}
 	}
 }

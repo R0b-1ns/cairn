@@ -1,6 +1,6 @@
 # cairn view
 
-Writes a read-only website of the project's notes, to browse and filter them in a browser. When the project has local children (see `project.md`), their notes are part of the site. It never changes the database, apart from the one-time schema 3 to 4 migration that every command performs when it opens an older database (see `storage.md`).
+Writes a read-only website of the project's notes, to browse and filter them in a browser. When the project has local children (see `project-link.md`), their notes are part of the site. It never changes the database, apart from the one-time schema migration (to the current schema, version 5) that every command performs when it opens an older database (see `storage.md`).
 
 ## Usage
 
@@ -108,4 +108,4 @@ Writes the site and prints `{"dir": "...", "index": "...", "url": ""}`. Exit cod
 - The folder is generated: it holds a `.gitignore` containing `*`, so it is never committed. It holds no source data and is safe to delete. See `storage.md`.
 - The site is read-only and a copy: the database stays the source of truth. Run `cairn view` again to refresh it.
 - Note text is escaped in the HTML and never inserted as HTML in the browser. See `security.md`.
-- The command never writes to the database. Opening a database still at schema 3 migrates it to schema 4 first, after a backup copy, as every command does.
+- The command never writes to the database. Opening a database on an older schema (3 or 4) migrates it to schema 5 first, after a backup copy, as every command does.

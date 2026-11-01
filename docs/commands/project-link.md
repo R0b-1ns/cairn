@@ -33,7 +33,7 @@ The folder is checked first. A local child must hold a database that names this 
 
 - `0`: linked.
 - `1`: runtime error: the project is unknown or not registered; the name is not an active child; the folder does not exist or is not that child; the registry cannot be written.
-- `2`: usage error: not exactly two arguments.
+- `2`: usage error: not exactly two arguments, or the child name is not a valid name.
 
 ## Examples
 
