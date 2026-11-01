@@ -26,7 +26,7 @@ None. A positional argument gives exit code 2.
 | `--task-prefix` | (empty; `T` for `auto`) | 1-5 capital letters (`^[A-Z]{1,5}$`) | Prefix of the `auto` mode: `FEAT` gives `FEAT-1`, `FEAT-2`. Refused with exit 3 with any other mode, and when given alone without `--tasks auto`. |
 | `--task-url` | (empty) | an `http://` or `https://` URL containing `{task}`, up to 500 characters | Template that turns a task into a link; `{task}` is replaced by the task ID. Allowed with every mode. |
 | `--task-pattern` | (empty; when no task flag is given the pattern is `^(?P<base>[A-Z]{2,5}-\d{1,4})(?:\.(?P<ext>\d{1,3}))?$`) | a regular expression with a named group `(?P<base>...)` and optionally `(?P<ext>...)`; at most 200 characters | The format every task ID must match. Given alone, it means `--tasks custom` with this pattern; it also goes with `--tasks custom`, and with no other mode (exit 2). An empty value is refused with exit 3. |
-| `--no-input` | `false` | | Do not ask questions even in a terminal. |
+| `--no-input` | `false` | | Never ask questions, even in a terminal; every value comes from the flags or from the defaults. See Interactive questions. |
 
 ## Task numbering
 
@@ -38,9 +38,38 @@ None. A positional argument gives exit code 2.
 | `github` | issue numbers | `#128` |
 | `custom` | your own regular expression, from `--task-pattern` | `TP-03` |
 
-With none of `--tasks` and `--task-pattern`, `init` keeps the legacy default: mode `custom` with the pattern `^(?P<base>[A-Z]{2,5}-\d{1,4})(?:\.(?P<ext>\d{1,3}))?$`, and writes one line on standard error: `cairn: note: task numbering was not chosen; using the default TP-03 format (see --tasks)`. The project is still created and the exit code is 0. Existing projects are not changed.
+With none of `--tasks` and `--task-pattern` (and without questions, see below), `init` keeps the legacy default: mode `custom` with the pattern `^(?P<base>[A-Z]{2,5}-\d{1,4})(?:\.(?P<ext>\d{1,3}))?$`, and writes one line on standard error: `cairn: note: task numbering was not chosen; using the default TP-03 format (see --tasks)`. The project is still created and the exit code is 0. Existing projects are not changed.
 
 `init` has no `--project` and no `--json` flag: it names the project itself.
+
+## Interactive questions
+
+When standard input and standard error are both terminals and `--no-input` is not given, `init` asks the questions whose flag was not given, in this order. Every question shows its default in brackets; Enter (or a line of spaces) accepts it. An invalid answer is explained and the question is asked again. Prompts go to standard error; standard output is unchanged.
+
+| # | Question | Default | Asked when |
+|---|---|---|---|
+| 1 | Project name | the lowercased name of the folder, when it is a valid name; otherwise none (an answer is required) | `--name` not given |
+| 2 | Storage mode: `project` (database in `.cairn/`) or `machine` (database in the data directory); a number or a name | `project` | `--mode` not given |
+| 3 | Project root folder | the current directory | `--path` not given |
+| 4 | Repos, comma-separated | the project name when the root folder holds a `.git` entry; otherwise none (an answer is required) | `--repos` not given |
+| 5 | Default repo | none (Enter for none) | `--default-repo` not given and there are several repos |
+| 6 | Context, one line | empty | `--context` not given |
+| 7 | Task numbering: `auto`, `jira`, `linear`, `github` or `custom`, each shown with what it is for | `auto` | no task flag at all |
+| 8 | Tag: 1-5 capital letters (`T` gives `T-1`, `FEAT` gives `FEAT-1`) | `T` | mode `auto`, `--task-prefix` not given |
+| 9 | Task format: a regular expression with a named group `(?P<base>...)` | none (an answer is required) | mode `custom` chosen or given by `--tasks custom` without `--task-pattern` |
+| 10 | Ticket URL template containing `{task}`, with an example shown | empty (Enter for none) | mode `jira`, `linear` or `github`, `--task-url` not given |
+
+Every answer goes through the same validation as the flags. When any task flag (`--tasks`, `--task-pattern`, `--task-prefix`, `--task-url`) is given, question 7 is not asked and the rules of the flags apply unchanged; with `--tasks auto`, `--tasks jira` and so on only the follow-up questions 8-10 still apply. In a terminal the legacy default and its note are replaced by these questions.
+
+After the last answer, `init` prints the equivalent command on standard error, so it can be repeated in a script: the flags that were given, and the answers that differ from the flag defaults. Values are quoted for a POSIX shell.
+
+```
+equivalent command: cairn init --name demo --repos server --tasks auto --task-prefix FEAT
+```
+
+Ctrl-D (end of input) or a read error at any question cancels `init`: it prints `cairn: init canceled`, exits with code 1 and has written nothing (no `.cairn` folder, no registry entry, no database). All questions are asked before anything is written.
+
+Without a terminal (a script, CI, an agent, piped standard input), or with `--no-input`, `init` never prompts and never reads standard input; it behaves exactly as described under Task numbering.
 
 ## Output
 
@@ -56,7 +85,7 @@ Machine mode prints `(machine mode)` and the database path under the data direct
 ## Exit codes
 
 - `0`: project created and registered.
-- `1`: runtime error: the name is already registered, the folder is already registered, the folder already holds a `.cairn` store, `--path` is not a folder, or a file cannot be written.
+- `1`: runtime error: the questions were canceled (Ctrl-D), the name is already registered, the folder is already registered, the folder already holds a `.cairn` store, `--path` is not a folder, or a file cannot be written.
 - `2`: usage error: a positional argument was given, or `--task-pattern` was combined with `--tasks auto`, `jira`, `linear` or `github`.
 - `3`: invalid input: name, mode, repos, context, task mode, prefix, URL template or task pattern fails validation, including `--tasks custom` without `--task-pattern` and `--task-prefix` with a mode other than `auto`. Every bad field is listed on standard error, task flags included.
 
@@ -109,6 +138,34 @@ cairn init --name Tidepool --repos server
 ```
 
 Exit code 3: the name has an uppercase letter.
+
+An interactive session (the answers after the colons are typed; empty ones are Enter):
+
+```
+$ cairn init --name demo
+Where should the database live?
+  1) project: the database lives in .cairn/ inside the project folder
+  2) machine: the database lives in cairn's data directory, outside the folder
+Your choice [project]:
+Project root folder [/work/demo]:
+Repos, comma-separated [demo]: server
+Context, one line, optional: Tide data service.
+How do you number your tasks?
+  1) auto: cairn numbers your work for you (T-1, T-2, ...). Pick this if you have no ticket tracker, or you work alone.
+  ...
+Your choice [auto]:
+Which tag do you want? Enter keeps T (T-1, T-2, ...), or type your own letters, for example FEAT (FEAT-1).
+Tag [T]: FEAT
+equivalent command: cairn init --name demo --repos server --context 'Tide data service.' --tasks auto --task-prefix FEAT
+initialized project demo (project mode) at /work/demo
+database: /work/demo/.cairn/cairn.db
+```
+
+```
+cairn init --name demo --repos server --no-input
+```
+
+Never asks, even in a terminal; uses the legacy default numbering and prints its note. Exit code 0.
 
 ## Notes
 

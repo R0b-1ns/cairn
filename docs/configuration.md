@@ -36,7 +36,7 @@ The flag `--path` sets the project root folder. It is not a configuration key.
 
 ## Task pattern
 
-When no task flag is given, `init` stores mode `custom` with the default pattern above and prints a note on standard error. Existing projects are not changed.
+When no task flag is given and `init` does not ask questions (no terminal, or `--no-input`), it stores mode `custom` with the default pattern above and prints a note on standard error. In a terminal it asks which numbering you want instead (see `commands/init.md`). Existing projects are not changed.
 
 A task ID is any string that the pattern matches. Matching uses Go's regular expression engine (RE2), which runs in linear time.
 

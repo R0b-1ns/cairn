@@ -29,6 +29,9 @@ type Ctx struct {
 	Stdout io.Writer
 	Stderr io.Writer
 	Getenv func(string) string
+	// Interactive is true when standard input and standard error are both
+	// terminals; only Main sets it, so Run never prompts.
+	Interactive bool
 }
 
 // Handler runs a command with its positional arguments (flags already parsed).
@@ -58,6 +61,10 @@ func Commands() []Command {
 // Run executes cairn and returns the process exit code.
 func Run(args []string, stdin io.Reader, stdout, stderr io.Writer, getenv func(string) string) int {
 	c := &Ctx{Stdin: stdin, Stdout: safeWriter{stdout}, Stderr: safeWriter{stderr}, Getenv: getenv}
+	return runCtx(c, args)
+}
+
+func runCtx(c *Ctx, args []string) int {
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" || (args[0] == "help" && len(args) == 1) {
 		usage(c)
 		return ExitOK
@@ -179,7 +186,23 @@ func osGetenv(k string) string { return os.Getenv(k) }
 
 // Main is the entry point used by cmd/cairn.
 func Main() int {
-	return Run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr, osGetenv)
+	c := &Ctx{Stdin: os.Stdin, Stdout: safeWriter{os.Stdout}, Stderr: safeWriter{os.Stderr}, Getenv: osGetenv}
+	c.Interactive = isTerminal(os.Stdin) && isTerminal(os.Stderr)
+	return runCtx(c, os.Args[1:])
+}
+
+// isTerminal reports whether f is a character device, which is how a terminal
+// shows up without any dependency.
+func isTerminal(f *os.File) bool {
+	fi, err := f.Stat()
+	if err != nil || fi.Mode()&os.ModeCharDevice == 0 {
+		return false
+	}
+	// /dev/null is a character device too, but nobody types there.
+	if null, err := os.Stat(os.DevNull); err == nil && os.SameFile(fi, null) {
+		return false
+	}
+	return true
 }
 
 func fail(c *Ctx, code int, format string, a ...any) int {

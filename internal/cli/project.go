@@ -44,11 +44,17 @@ func defineInit(fs *flag.FlagSet) Handler {
 		if len(args) != 0 {
 			return fail(c, ExitUsage, "init takes no arguments")
 		}
+		given := setFlags(fs)
+		if c.Interactive && !noInput {
+			v := &initValues{P: &p, Repos: &repos, Path: &path, TaskMode: &taskMode}
+			if err := askInit(c, given, v); err != nil {
+				return fail(c, ExitRuntime, "%v", err)
+			}
+		}
 		p.Repos = splitList(repos)
 		if p.DefaultRepo == "" && len(p.Repos) == 1 {
 			p.DefaultRepo = p.Repos[0] // most projects have one repo: no need to name it every time
 		}
-		given := setFlags(fs)
 		var errs []validate.FieldError
 		legacy := false
 		switch {
