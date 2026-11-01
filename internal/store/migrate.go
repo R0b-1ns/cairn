@@ -70,10 +70,17 @@ func migrationFrom(v int) (migration, bool) {
 
 // migrate upgrades an older database in place. It does nothing for a current
 // database or one whose version has no migration (verify reports those).
-// The upgrade runs in one write transaction, after a backup copy of the file
-// made while holding the write lock, so a concurrent opener cannot copy a
-// half-migrated or already-migrated file.
-func (s *Store) migrate() error {
+//
+// Everything runs in one write transaction (BEGIN IMMEDIATE): re-read the
+// version, verify the old schema, copy the file to a backup, run the steps and
+// set the new version. Holding the write lock across the check means a process
+// that loses the race sees the new version and does nothing, instead of
+// comparing a freshly migrated schema against the old one.
+//
+// The copy reads the file through a separate descriptor. On POSIX, closing any
+// descriptor of a file drops every lock the process holds on it, SQLite's
+// included, so that descriptor stays open until the transaction has ended.
+func (s *Store) migrate() (err error) {
 	var v int
 	if err := s.db.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
 		return nil // verify reports it
@@ -81,15 +88,17 @@ func (s *Store) migrate() error {
 	if _, ok := migrationFrom(v); !ok {
 		return nil
 	}
-	// Refuse a hostile or corrupt old database before touching it or copying it.
-	if err := s.verifyShape(v); err != nil {
-		return err
-	}
 	tx, err := s.db.Begin() // BEGIN IMMEDIATE
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	var src *os.File
+	defer func() {
+		tx.Rollback() // no-op after a successful Commit
+		if src != nil {
+			src.Close() // only now: the transaction no longer holds a lock
+		}
+	}()
 	if err := tx.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
 		return err
 	}
@@ -97,7 +106,14 @@ func (s *Store) migrate() error {
 	if !ok {
 		return nil // another process migrated first
 	}
-	if err := backupFile(s.path, fmt.Sprintf("%s.v%d.bak", s.path, v)); err != nil {
+	// Refuse a hostile or corrupt old database before copying or altering it.
+	if err := verifyShape(tx, v); err != nil {
+		return err
+	}
+	if src, err = os.Open(s.path); err != nil {
+		return fmt.Errorf("backup before migration: %w", err)
+	}
+	if err := backupFile(src, fmt.Sprintf("%s.v%d.bak", s.path, v)); err != nil {
 		return fmt.Errorf("backup before migration: %w", err)
 	}
 	for ok {
@@ -113,14 +129,10 @@ func (s *Store) migrate() error {
 	return tx.Commit()
 }
 
-// backupFile copies src to dst (mode 0600): written to a temporary file in the
-// same directory, synced, then renamed over dst.
-func backupFile(src, dst string) (err error) {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
+// backupFile copies the open file in to dst (mode 0600): written to a temporary
+// file in the same directory, synced, then renamed over dst. It does not close
+// in (see migrate).
+func backupFile(in *os.File, dst string) (err error) {
 	tmp, err := os.CreateTemp(filepath.Dir(dst), filepath.Base(dst)+".*.tmp")
 	if err != nil {
 		return err

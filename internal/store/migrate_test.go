@@ -89,7 +89,7 @@ func TestMigrateV3ToV4(t *testing.T) {
 	if v := userVersion(t, bak); v != 3 {
 		t.Fatalf("backup user_version = %d, want 3", v)
 	}
-	if err := s.verifySchema(SchemaVersion); err != nil {
+	if err := verifySchema(s.db, SchemaVersion); err != nil {
 		t.Fatalf("migrated schema must equal a fresh one: %v", err)
 	}
 }

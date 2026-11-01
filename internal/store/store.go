@@ -123,17 +123,23 @@ func (s *Store) verify() error {
 	if v != SchemaVersion {
 		return fmt.Errorf("unsupported database version %d (this build supports %d)", v, SchemaVersion)
 	}
-	return s.verifyShape(v)
+	return verifyShape(s.db, v)
+}
+
+// querier runs queries; satisfied by *sql.DB and *sql.Tx.
+type querier interface {
+	Query(query string, args ...any) (*sql.Rows, error)
+	QueryRow(query string, args ...any) *sql.Row
 }
 
 // verifyShape checks integrity, triggers and the exact schema of a database
 // claimed to be at schema version v.
-func (s *Store) verifyShape(v int) error {
+func verifyShape(q querier, v int) error {
 	var check string
-	if err := s.db.QueryRow("PRAGMA quick_check(1)").Scan(&check); err != nil || check != "ok" {
+	if err := q.QueryRow("PRAGMA quick_check(1)").Scan(&check); err != nil || check != "ok" {
 		return fmt.Errorf("database integrity check failed: %v %s", err, check)
 	}
-	rows, err := s.db.Query("SELECT name, COALESCE(sql,'') FROM sqlite_master WHERE type='trigger'")
+	rows, err := q.Query("SELECT name, COALESCE(sql,'') FROM sqlite_master WHERE type='trigger'")
 	if err != nil {
 		return fmt.Errorf("not a cairn database: %w", err)
 	}
@@ -158,18 +164,18 @@ func (s *Store) verifyShape(v int) error {
 			return fmt.Errorf("immutability trigger %s was altered: database refused", name)
 		}
 	}
-	if err := s.verifySchema(v); err != nil {
+	if err := verifySchema(q, v); err != nil {
 		return err
 	}
 	var n int
-	if err := s.db.QueryRow("SELECT COUNT(*) FROM project").Scan(&n); err != nil || n != 1 {
+	if err := q.QueryRow("SELECT COUNT(*) FROM project").Scan(&n); err != nil || n != 1 {
 		return fmt.Errorf("project row missing: database refused")
 	}
 	return nil
 }
 
 // schemaObjects maps "type:name" to normalized SQL for everything in sqlite_master.
-func schemaObjects(db *sql.DB) (map[string]string, error) {
+func schemaObjects(db querier) (map[string]string, error) {
 	rows, err := db.Query("SELECT type, name, COALESCE(sql,'') FROM sqlite_master")
 	if err != nil {
 		return nil, err
@@ -203,12 +209,12 @@ func expectedSchema(version int) (map[string]string, error) {
 
 // verifySchema refuses a database whose schema differs in any way from ours:
 // extra or missing tables, indexes, views or triggers, or altered definitions.
-func (s *Store) verifySchema(version int) error {
+func verifySchema(q querier, version int) error {
 	want, err := expectedSchema(version)
 	if err != nil {
 		return err
 	}
-	have, err := schemaObjects(s.db)
+	have, err := schemaObjects(q)
 	if err != nil {
 		return fmt.Errorf("not a cairn database: %w", err)
 	}
