@@ -24,7 +24,7 @@
 <tbody>
 {{- $author := .Content.Author}}
 {{- range .Content.Rows}}
-<tr data-id="{{.ID}}" data-task="{{.Task}}" data-repo="{{.Repo}}" data-agent="{{.Agent}}" data-at="{{.At}}" data-body="{{.Text}}" data-by="{{.By}}" data-state="{{.State}}" data-note="{{.NoteID}}" data-text="{{.Search}}" data-closed="{{.Closed}}"{{if .Closed}} class="closed" hidden{{end}}>
+<tr data-id="{{.ID}}" data-task="{{.Task}}" data-task-base="{{.TaskBase}}" data-repo="{{.Repo}}" data-agent="{{.Agent}}" data-at="{{.At}}" data-body="{{.Text}}" data-by="{{.By}}" data-state="{{.State}}" data-note="{{.NoteID}}" data-text="{{.Search}}" data-closed="{{.Closed}}"{{if .Closed}} class="closed" hidden{{end}}>
 <td><code>{{.ID}}</code></td>
 <td>{{dash .Task}}</td>
 <td>{{.Repo}}</td>

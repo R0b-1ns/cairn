@@ -20,7 +20,7 @@
 </thead>
 <tbody>
 {{- range .Content.Rows}}
-<tr data-id="{{.ID}}" data-status="{{.Status}}" data-task="{{.Task}}" data-repo="{{.Repo}}" data-agent="{{.Agent}}" data-at="{{.At}}" data-open="{{.OpenPoints}}" data-title="{{.Title}}" data-text="{{.Text}}">
+<tr data-id="{{.ID}}" data-status="{{.Status}}" data-task="{{.Task}}" data-task-base="{{.TaskBase}}" data-repo="{{.Repo}}" data-agent="{{.Agent}}" data-at="{{.At}}" data-open="{{.OpenPoints}}" data-title="{{.Title}}" data-text="{{.Text}}">
 <td class="nowrap"><time datetime="{{.At}}">{{date .At}}</time></td>
 <td>{{dash .Task}}</td>
 <td><a href="notes/{{.ID}}.html">{{.Title}}</a></td>

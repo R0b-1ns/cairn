@@ -510,6 +510,14 @@ assert.strictEqual(app.entriesMarkdown(data, ["e-1", "e-2"]),
   "- ` + "`e-1`" + ` [user] use a hash (note n-1)\n- ` + "`e-2`" + ` run it (note n-2)\n");
 assert.strictEqual(app.entriesMarkdown(data, ["e-3"]),
   "- ` + "`e-3`" + ` [agent] use a tree (note n-1)  (superseded by a-1)\n");
+// A base task selects itself and its extensions; an extension selects exactly itself.
+const base = {...row, task: "TP-03", taskBase: "TP-03"}, ext = {...row, task: "TP-03.1", taskBase: "TP-03"};
+assert.ok(app.matches(base, {...any, task: "TP-03", taskIsBase: true}));
+assert.ok(app.matches(ext, {...any, task: "TP-03", taskIsBase: true}));
+assert.ok(app.matches(ext, {...any, task: "TP-03.1", taskIsBase: false}));
+assert.ok(!app.matches(base, {...any, task: "TP-03.1", taskIsBase: false}));
+assert.ok(!app.matches({...row, task: "TP-30", taskBase: "TP-30"}, {...any, task: "TP-03", taskIsBase: true}));
+assert.ok(!app.matches(base, {...any, task: "", taskIsBase: false}));
 assert.ok(app.compare("2", "10", true) < 0);
 assert.ok(app.compare("b", "A", false) > 0);
 `
@@ -520,5 +528,100 @@ assert.ok(app.compare("b", "A", false) > 0);
 	out, err := exec.Command(node, "-e", script, abs).CombinedOutput()
 	if err != nil {
 		t.Fatalf("node: %v\n%s", err, out)
+	}
+}
+
+// taskSite is the sample site with the default task pattern, an extension note of
+// TP-01 (with a decision) and a note of TP-02.1 whose base has no note of its own.
+func taskSite() *Site {
+	s := sampleSite()
+	s.Project.TaskPattern = model.DefaultTaskPattern
+	add := func(id, task, at string) {
+		n := model.Note{ID: id, Agent: "builder", Repo: "server", At: at, Task: task, Title: "Note " + id, Status: model.StatusDone}
+		s.Notes = append([]NoteView{{
+			Header:  store.NoteHeader{ID: id, Task: task, Repo: "server", Agent: "builder", At: at, Title: n.Title, Status: model.StatusDone},
+			Written: model.StatusDone, Note: n, States: map[string]store.EntryInfo{}, Markdown: "## " + id + "\n\n",
+		}}, s.Notes...)
+	}
+	add("n-cccccc", "TP-01.1", "2026-10-30T11:00:00Z")
+	add("n-dddddd", "TP-02.1", "2026-10-30T12:00:00Z")
+	e := model.Entry{ID: "e-ccccc1", Type: model.TypeDecision, Text: "keep the b-tree for ranges", By: "user"}
+	s.Notes[1].Note.Entries = []model.Entry{e}
+	info := store.EntryInfo{Entry: e, NoteID: "n-cccccc", Task: "TP-01.1", Repo: "server", At: "2026-10-30T11:00:00Z"}
+	s.Notes[1].States[e.ID] = info
+	s.Entries = append([]EntryRow{{EntryInfo: info, Agent: "builder"}}, s.Entries...)
+	return s
+}
+
+// selectOptions returns the options of the select id on page, as `value|label|base`.
+func selectOptions(t *testing.T, page, id string) []string {
+	t.Helper()
+	sel := regexp.MustCompile(`(?s)<select id="` + id + `"[^>]*>(.*?)</select>`).FindStringSubmatch(page)
+	if sel == nil {
+		t.Fatalf("select %s missing", id)
+	}
+	var out []string
+	for _, m := range regexp.MustCompile(`<option value="([^"]*)"( data-base="true")?>([^<]*)</option>`).FindAllStringSubmatch(sel[1], -1) {
+		base := ""
+		if m[2] != "" {
+			base = "|base"
+		}
+		out = append(out, m[1]+"|"+m[3]+base)
+	}
+	return out
+}
+
+func TestTaskFilterFollowsBaseAndExtensionRule(t *testing.T) {
+	dir := writeSite(t, taskSite())
+	index := readFile(t, dir, "index.html")
+	for id, base := range map[string]string{"n-aaaaaa": "TP-01", "n-bbbbbb": "", "n-cccccc": "TP-01", "n-dddddd": "TP-02"} {
+		row := regexp.MustCompile(`<tr [^>]*data-id="` + id + `"[^>]*>`).FindString(index)
+		if !strings.Contains(row, `data-task-base="`+base+`"`) {
+			t.Errorf("note row %s lacks data-task-base %q: %s", id, base, row)
+		}
+	}
+	got := strings.Join(selectOptions(t, index, "f-task"), ", ")
+	want := "*|Any, |-, TP-01|TP-01 (incl. extensions)|base, TP-01.1|TP-01.1, TP-02|TP-02 (incl. extensions)|base, TP-02.1|TP-02.1"
+	if got != want {
+		t.Errorf("notes task options:\n got %s\nwant %s", got, want)
+	}
+	dec := readFile(t, dir, "decisions.html")
+	for id, base := range map[string]string{"e-aaaaa2": "TP-01", "e-ccccc1": "TP-01", "e-bbbbb1": ""} {
+		row := regexp.MustCompile(`<tr [^>]*data-id="` + id + `"[^>]*>`).FindString(dec)
+		if !strings.Contains(row, `data-task-base="`+base+`"`) {
+			t.Errorf("entry row %s lacks data-task-base %q: %s", id, base, row)
+		}
+	}
+	got = strings.Join(selectOptions(t, dec, "f-task"), ", ")
+	want = "*|Any, |-, TP-01|TP-01 (incl. extensions)|base, TP-01.1|TP-01.1"
+	if got != want {
+		t.Errorf("decisions task options:\n got %s\nwant %s", got, want)
+	}
+	// A base without extensions in a view is offered plainly, still as a base.
+	got = strings.Join(selectOptions(t, readFile(t, dir, "open-points.html"), "f-task"), ", ")
+	if want = "*|Any, TP-01|TP-01|base"; got != want {
+		t.Errorf("open points task options:\n got %s\nwant %s", got, want)
+	}
+}
+
+// Each view offers only the values of the rows it lists: the addendum agent
+// "reviewer" wrote no note, so the Notes view does not offer it.
+func TestFilterOptionsArePerView(t *testing.T) {
+	dir := writeSite(t, sampleSite())
+	cases := []struct{ file, sel, want string }{
+		{"index.html", "f-agent", "*|Any, builder|builder, planner|planner"},
+		{"index.html", "f-repo", "*|Any, server|server, web|web"},
+		{"decisions.html", "f-agent", "*|Any, builder|builder, planner|planner"},
+		{"open-points.html", "f-agent", "*|Any, builder|builder"},
+		{"open-points.html", "f-repo", "*|Any, server|server"},
+		{"helpers.html", "f-agent", "*|Any, planner|planner"},
+		{"helpers.html", "f-repo", "*|Any, web|web"},
+		{"helpers.html", "f-task", "*|Any, |-"},
+	}
+	for _, c := range cases {
+		got := strings.Join(selectOptions(t, readFile(t, dir, c.file), c.sel), ", ")
+		if got != c.want {
+			t.Errorf("%s %s:\n got %s\nwant %s", c.file, c.sel, got, c.want)
+		}
 	}
 }

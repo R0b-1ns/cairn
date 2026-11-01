@@ -39,7 +39,7 @@
 <select id="f-task" name="task">
 <option value="*">Any</option>
 {{- range .Filters.Tasks}}
-<option value="{{.Value}}">{{.Label}}</option>
+<option value="{{.Value}}"{{if .Base}} data-base="true"{{end}}>{{.Label}}</option>
 {{- end}}
 </select>
 <label for="f-repo">Repo</label>

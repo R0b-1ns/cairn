@@ -5,12 +5,14 @@
   "use strict";
 
   // matches reports whether a row passes the filters.
-  // row: {status, task, repo, agent, at, text, closed}; f: {text, status, task, repo, agent, from, to, showClosed}.
+  // row: {status, task, taskBase, repo, agent, at, text, closed};
+  // f: {text, status, task, taskIsBase, repo, agent, from, to, showClosed}.
   // task, repo and agent use "*" for any (a task may legitimately be "").
+  // A base task (taskIsBase) selects itself and its extensions; any other task selects exactly itself.
   function matches(row, f) {
     if (row.closed && !f.showClosed) return false;
     if (f.status && row.status !== f.status) return false;
-    if (f.task !== "*" && row.task !== f.task) return false;
+    if (f.task !== "*" && (f.taskIsBase ? row.taskBase !== f.task : row.task !== f.task)) return false;
     if (f.repo !== "*" && row.repo !== f.repo) return false;
     if (f.agent !== "*" && row.agent !== f.agent) return false;
     var day = (row.at || "").slice(0, 10);
@@ -78,7 +80,10 @@
 
   function current() {
     var closed = document.getElementById("show-closed");
+    var task = document.getElementById("f-task");
+    var picked = task && task.selectedIndex >= 0 ? task.options[task.selectedIndex] : null;
     return {
+      taskIsBase: picked !== null && picked.getAttribute("data-base") === "true",
       text: value("f-text", ""),
       status: value("f-status", ""),
       task: value("f-task", "*"),
@@ -93,7 +98,7 @@
   function rowData(tr) {
     var d = tr.dataset;
     return {
-      status: d.status || "", task: d.task || "", repo: d.repo || "", agent: d.agent || "",
+      status: d.status || "", task: d.task || "", taskBase: d.taskBase || "", repo: d.repo || "", agent: d.agent || "",
       at: d.at || "", text: d.text || "", closed: d.closed === "true"
     };
   }

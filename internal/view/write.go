@@ -17,6 +17,7 @@ import (
 
 	"github.com/R0b-1ns/cairn/internal/ids"
 	"github.com/R0b-1ns/cairn/internal/model"
+	"github.com/R0b-1ns/cairn/internal/validate"
 )
 
 //go:embed templates assets
@@ -38,8 +39,12 @@ var pages = func() map[string]*template.Template {
 	return out
 }()
 
-// option is one value offered by a select filter.
-type option struct{ Value, Label string }
+// option is one value offered by a select filter. A base task option (Base)
+// selects the base and its extensions; any other option selects exactly its value.
+type option struct {
+	Value, Label string
+	Base         bool
+}
 
 // filters are the values offered by the sidebar selects.
 type filters struct {
@@ -63,9 +68,9 @@ type page struct {
 type notesContent struct{ Rows []noteRow }
 
 type noteRow struct {
-	ID, Task, Title, Repo, Agent, At, Text string
-	Status                                 model.Status
-	OpenPoints                             int
+	ID, Task, TaskBase, Title, Repo, Agent, At, Text string
+	Status                                           model.Status
+	OpenPoints                                       int
 }
 
 type entriesContent struct {
@@ -77,8 +82,8 @@ type entriesContent struct {
 }
 
 type entryRow struct {
-	ID, Task, Repo, At, Text, By, Agent, NoteID, State, Search string
-	Closed                                                     bool
+	ID, Task, TaskBase, Repo, At, Text, By, Agent, NoteID, State, Search string
+	Closed                                                               bool
 }
 
 type noteContent struct {
@@ -182,22 +187,25 @@ func render(s *Site) (map[string][]byte, error) {
 		}
 		files["assets/"+a] = b
 	}
-	f := buildFilters(s)
 	base := func(title, active string) page {
-		return page{Title: title, Project: s.Project.Name, Generated: s.Generated, Active: active, Filters: f}
+		return page{Title: title, Project: s.Project.Name, Generated: s.Generated, Active: active}
 	}
 
 	p := base("Notes", "notes")
 	p.Listing, p.Notes = true, true
 	rows := []noteRow{}
+	var nf filterSet
 	for _, nv := range s.Notes {
+		nf.add(nv.Header.Task, nv.Header.Repo, nv.Header.Agent)
 		rows = append(rows, noteRow{
-			ID: nv.Header.ID, Task: nv.Header.Task, Title: nv.Header.Title, Repo: nv.Header.Repo,
+			ID: nv.Header.ID, Task: nv.Header.Task, TaskBase: taskBase(s.Project, nv.Header.Task),
+			Title: nv.Header.Title, Repo: nv.Header.Repo,
 			Agent: nv.Header.Agent, At: nv.Header.At, Status: nv.Header.Status, OpenPoints: nv.OpenPoints,
 			Text: noteSearchText(nv),
 		})
 	}
 	p.Content = notesContent{Rows: rows}
+	p.Filters = nf.build(s.Project, true)
 	if err := renderPage(files, "index.html", "notes.html", p); err != nil {
 		return nil, err
 	}
@@ -215,9 +223,11 @@ func render(s *Site) (map[string][]byte, error) {
 		p.Listing, p.Entries = true, true
 		c := entriesContent{Noun: v.noun, Author: v.typ == model.TypeDecision, Rows: []entryRow{},
 			Download: strings.TrimSuffix(v.file, ".html") + ".md"}
+		var ef filterSet
 		for _, e := range s.EntriesOf(v.typ) {
+			ef.add(e.Task, e.Repo, e.Agent)
 			c.Rows = append(c.Rows, entryRow{
-				ID: e.ID, Task: e.Task, Repo: e.Repo, At: e.At, Text: e.Text, By: e.By, Agent: e.Agent,
+				ID: e.ID, Task: e.Task, TaskBase: taskBase(s.Project, e.Task), Repo: e.Repo, At: e.At, Text: e.Text, By: e.By, Agent: e.Agent,
 				NoteID: e.NoteID, Closed: e.Closed, State: stateLabel(e.Type, e.Closed),
 				Search: strings.ToLower(strings.Join([]string{e.ID, e.Text, e.Task, e.Repo, e.Agent, e.NoteID}, " ")),
 			})
@@ -229,6 +239,7 @@ func render(s *Site) (map[string][]byte, error) {
 			}
 		}
 		p.Content = c
+		p.Filters = ef.build(s.Project, false)
 		if err := renderPage(files, v.file, "entries.html", p); err != nil {
 			return nil, err
 		}
@@ -288,37 +299,91 @@ func buildData(s *Site) ([]byte, error) {
 	return []byte("window.CAIRN = " + string(b) + ";\n"), nil
 }
 
-func buildFilters(s *Site) filters {
-	tasks, repos, agents := map[string]bool{}, map[string]bool{}, map[string]bool{}
-	for _, nv := range s.Notes {
-		tasks[nv.Header.Task] = true
-		repos[nv.Header.Repo] = true
-		agents[nv.Header.Agent] = true
+// filterSet gathers the task, repo and agent values of the rows of one view.
+type filterSet struct{ tasks, repos, agents map[string]bool }
+
+func (f *filterSet) add(task, repo, agent string) {
+	if f.tasks == nil {
+		f.tasks, f.repos, f.agents = map[string]bool{}, map[string]bool{}, map[string]bool{}
 	}
-	for _, e := range s.Entries {
-		tasks[e.Task] = true
-		repos[e.Repo] = true
-		agents[e.Agent] = true
-	}
-	opts := func(m map[string]bool) []option {
-		var keys []string
-		for k := range m {
-			keys = append(keys, k)
+	f.tasks[task], f.repos[repo], f.agents[agent] = true, true, true
+}
+
+// build turns the values into select options; status is offered on the Notes view only.
+func (f *filterSet) build(p model.Project, status bool) filters {
+	out := filters{Tasks: taskOptions(p, f.tasks), Repos: plainOptions(f.repos), Agents: plainOptions(f.agents)}
+	if status {
+		out.Statuses = []option{
+			{Value: string(model.StatusDone), Label: "done"}, {Value: string(model.StatusInProgress), Label: "in_progress"},
+			{Value: string(model.StatusBlocked), Label: "blocked"},
 		}
-		sort.Strings(keys)
-		out := []option{}
-		for _, k := range keys {
-			out = append(out, option{Value: k, Label: orDash(k)})
+	}
+	return out
+}
+
+func sortedKeys(m map[string]bool) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func plainOptions(m map[string]bool) []option {
+	out := []option{}
+	for _, k := range sortedKeys(m) {
+		out = append(out, option{Value: k, Label: orDash(k)})
+	}
+	return out
+}
+
+// taskOptions offers, as the CLI does, each base task (selecting it and its
+// extensions, and labelled so when the view has some) and each extension
+// (selecting exactly itself). A base is offered even when only its extensions
+// have rows. "-" (no task) is exact.
+func taskOptions(p model.Project, tasks map[string]bool) []option {
+	opts := map[string]option{}
+	extended := map[string]bool{} // base -> the view has one of its extensions
+	for task := range tasks {
+		if task == "" {
+			opts[task] = option{Value: "", Label: "-"}
+			continue
 		}
-		return out
+		b := taskBase(p, task)
+		if b != task {
+			extended[b] = true
+			if _, ok := opts[task]; !ok {
+				opts[task] = option{Value: task, Label: task}
+			}
+		}
+		opts[b] = option{Value: b, Label: b, Base: true}
 	}
-	return filters{
-		Statuses: []option{
-			{string(model.StatusDone), "done"}, {string(model.StatusInProgress), "in_progress"},
-			{string(model.StatusBlocked), "blocked"},
-		},
-		Tasks: opts(tasks), Repos: opts(repos), Agents: opts(agents),
+	for b := range extended {
+		opts[b] = option{Value: b, Label: b + " (incl. extensions)", Base: true}
 	}
+	keys := make([]string, 0, len(opts))
+	for k := range opts {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := []option{}
+	for _, k := range keys {
+		out = append(out, opts[k])
+	}
+	return out
+}
+
+// taskBase is the base of a task under the project's pattern (as `cairn list
+// --task` uses it), or the task itself when it does not parse.
+func taskBase(p model.Project, task string) string {
+	if task == "" {
+		return ""
+	}
+	if b, _, ok := validate.TaskParts(p, task); ok {
+		return b
+	}
+	return task
 }
 
 func noteSearchText(nv NoteView) string {

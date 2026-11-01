@@ -54,7 +54,7 @@ The site is in English. It has four views, each a page with its own filters:
 - **Open points**: every open-point entry.
 - **Helpers**: every helper entry.
 
-The filters are status, task, repo, agent, a date range and text. Decisions and open points that are closed are hidden until "Show closed" is ticked; when all of them are closed, the page says so.
+The filters are status, task, repo, agent, a date range and text. Each view offers only the values of the rows it lists. The task filter follows the same rule as `cairn list --task`: a base task such as `TP-03`, shown as "TP-03 (incl. extensions)" when the view has some, selects the base and its extensions; an extension such as `TP-03.1` selects only itself. Decisions and open points that are closed are hidden until "Show closed" is ticked; when all of them are closed, the page says so.
 
 Each note has a Markdown download. Each view has a "Download this view" button that exports only what is currently filtered. In a downloaded list of decisions or open points, a closed entry ends with `(superseded by <id>)` or `(resolved by <id>)`, as in `cairn list`.
 
