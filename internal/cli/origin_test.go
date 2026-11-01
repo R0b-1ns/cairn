@@ -210,3 +210,19 @@ func TestAmendEmptyNeedsSomethingIncludingRef(t *testing.T) {
 		t.Errorf("ref only: code %d, stderr %q", r.code, r.err)
 	}
 }
+
+func TestAddNewTaskExhausted(t *testing.T) {
+	e := newEnv(t)
+	e.initProject("--tasks", "auto")
+	addNote(t, e, "--task", "T-999999")
+	for i := 0; i < 2; i++ {
+		r := e.run("add", "--agent", "b", "--repo", "server", "--model", "m", "--title", "t", "--status", "done",
+			"--change", "x", "--none", "decision,open,note,helper", "--new-task")
+		if r.code != 3 || !strings.Contains(r.err, "task numbers exhausted for prefix T (max 999999)") {
+			t.Fatalf("attempt %d: code %d, stderr %q", i, r.code, r.err)
+		}
+	}
+	if out := e.mustRun("list").out; strings.Count(out, "T-") != 1 {
+		t.Fatalf("list after refusals:\n%s", out)
+	}
+}

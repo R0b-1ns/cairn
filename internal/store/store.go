@@ -401,7 +401,15 @@ func insertNoteTx(tx *sql.Tx, p model.Project, n model.Note) (model.Note, error)
 		}
 		n.NewTask = false
 	}
-	base, ext, _ := validate.TaskParts(p, n.Task)
+	var base, ext string
+	if n.Task != "" {
+		var ok bool
+		if base, ext, ok = validate.TaskParts(p, n.Task); !ok {
+			// Never store a task without its base: it would be unreachable by
+			// task queries and invisible to automatic numbering.
+			return n, &TaskError{fmt.Sprintf("task %s does not match the task pattern", n.Task)}
+		}
+	}
 	if n.At, err = normAt(n.At); err != nil {
 		return n, err
 	}

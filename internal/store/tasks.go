@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/R0b-1ns/cairn/internal/model"
@@ -12,6 +13,12 @@ import (
 // ErrNotAuto is returned when a new task number is requested in a project whose
 // task mode is not "auto".
 var ErrNotAuto = errors.New("project is not in auto mode")
+
+// TaskError reports a task that cannot be stored: it does not match the task
+// pattern, or automatic numbering has run out. It is a validation failure.
+type TaskError struct{ Msg string }
+
+func (e *TaskError) Error() string { return e.Msg }
 
 // likeEscape escapes the LIKE wildcards of s (to be used with ESCAPE '\').
 func likeEscape(s string) string {
@@ -45,7 +52,11 @@ func nextTask(tx *sql.Tx, p model.Project) (string, error) {
 	if err := rows.Err(); err != nil {
 		return "", err
 	}
-	return tasks.Format(p.TaskPrefix, tasks.Next(p.TaskPrefix, bases)), nil
+	n := tasks.Next(p.TaskPrefix, bases)
+	if n > tasks.MaxNumber {
+		return "", &TaskError{fmt.Sprintf("task numbers exhausted for prefix %s (max %d)", p.TaskPrefix, tasks.MaxNumber)}
+	}
+	return tasks.Format(p.TaskPrefix, n), nil
 }
 
 // TaskRefs returns the distinct refs carried by the notes and addenda of a

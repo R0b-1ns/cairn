@@ -58,8 +58,10 @@ func TestNewTaskNumbers(t *testing.T) {
 	if err != nil || n.Task != "T-10" {
 		t.Fatalf("got %q, %v", n.Task, err)
 	}
-	// A foreign-looking task is ignored by the count.
-	if _, err := s.InsertNote(taskNote("TP-03", false)); err != nil {
+	// A foreign-looking task base is ignored by the count. The pattern refuses
+	// it on insert, so the row is written directly.
+	if _, err := s.db.Exec(`INSERT INTO notes(id,agent,repo,at,task,task_base,task_ext,model,title,status,none,impacts,commits)
+		VALUES ('n-tp0003','a','server','2026-10-30T10:00:00Z','TP-03','TP-03','','m','t','done','[]','[]','[]')`); err != nil {
 		t.Fatal(err)
 	}
 	if n, _ = s.InsertNote(taskNote("", true)); n.Task != "T-11" {
@@ -276,5 +278,34 @@ func TestImportIdempotentWithNewFields(t *testing.T) {
 	n2.Branch = "other"
 	if _, err := dst.Import([]ImportItem{{Note: &n2}}); !errors.Is(err, ErrConflict) {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestNewTaskExhausted(t *testing.T) {
+	s := newAutoStore(t)
+	if _, err := s.InsertNote(taskNote("T-999999", false)); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		_, err := s.InsertNote(taskNote("", true))
+		var te *TaskError
+		if !errors.As(err, &te) || err.Error() != "task numbers exhausted for prefix T (max 999999)" {
+			t.Fatalf("attempt %d: got %v", i, err)
+		}
+	}
+	if n, _ := s.CountNotes(); n != 1 {
+		t.Fatalf("notes = %d, want 1", n)
+	}
+}
+
+func TestInsertRefusesTaskOutsidePattern(t *testing.T) {
+	s := newAutoStore(t)
+	_, err := s.InsertNote(taskNote("T-1000000", false))
+	var te *TaskError
+	if !errors.As(err, &te) || err.Error() != "task T-1000000 does not match the task pattern" {
+		t.Fatalf("got %v", err)
+	}
+	if n, _ := s.CountNotes(); n != 0 {
+		t.Fatalf("notes = %d, want 0", n)
 	}
 }

@@ -114,6 +114,10 @@ func storeFailure(c *Ctx, err error) int {
 	if errors.As(err, &le) {
 		return reportFieldErrors(c, []validate.FieldError{{Field: le.Field, Message: le.Target + ": " + le.Reason}})
 	}
+	var te *store.TaskError
+	if errors.As(err, &te) {
+		return fail(c, ExitValidation, "%v", err)
+	}
 	return fail(c, ExitRuntime, "%v", err)
 }
 

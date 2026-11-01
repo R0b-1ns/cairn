@@ -18,6 +18,9 @@ const (
 	Custom = "custom"
 )
 
+// MaxNumber is the highest automatic task number the auto pattern accepts.
+const MaxNumber = 999999
+
 const ext = `(?:\.(?P<ext>\d{1,3}))?$`
 
 var prefixRe = regexp.MustCompile(`^[A-Z]{1,5}$`)
