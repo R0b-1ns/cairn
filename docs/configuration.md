@@ -1,6 +1,6 @@
 # Configuration
 
-A project has nine configuration keys. They are set once by `cairn init`, stored in the `project` table, and never change afterward.
+A project has nine configuration keys. They are set once by `cairn init`, stored in the `project` table, and never change afterward, except that `repos` can grow when a child joins (see Immutability).
 
 ## Keys
 
@@ -9,7 +9,7 @@ A project has nine configuration keys. They are set once by `cairn init`, stored
 | `name` | `--name` | none; required | Must match `^[a-z0-9][a-z0-9_-]{0,39}$`: lowercase letters, digits, `-`, `_`; first character a letter or digit | 1-40 characters; unique among registered projects | Name used with `--project` and `CAIRN_PROJECT`. Folder name for machine mode. |
 | `mode` | `--mode` | `project` | `project`, `machine` | One of the two values | `project`: database in `<root>/.cairn/`. `machine`: database in the data directory. See `storage.md`. |
 | `context` | `--context` | empty | Any text. Newline and tab allowed | At most 2000 characters; no other control characters | Free text describing the project. Printed by `cairn context`. |
-| `repos` | `--repos` (comma-separated; spaces trimmed; empty items dropped) | none; required | At least 1 and at most 50 names, each matching `^[a-z0-9][a-z0-9._-]{0,39}$` | 1-40 characters per name | The only repo names a note may use in `repo` or `impacts`. |
+| `repos` | `--repos` (comma-separated; spaces trimmed; empty items dropped) | none; required | At least 1 and at most 50 names, each matching `^[a-z0-9][a-z0-9._-]{0,39}$` | 1-40 characters per name | The only repo names a note may use in `repo` or `impacts`. Set at `init`; a new repo can be added later by joining a child (`init --project PARENT --repo NAME`), which records it in the project's link events. |
 | `default_repo` | `--default-repo` | the only repo when `--repos` lists exactly one; otherwise empty (no default) | empty, or one of `repos` | same as a repo name | The repo `add` uses when `--repo` is omitted (flag mode) or `repo` is missing (`--stdin`). An explicit `--repo` always wins. |
 | `task_pattern` | `--task-pattern`, or compiled from `--tasks` | `^(?P<base>[A-Z]{2,5}-\d{1,4})(?:\.(?P<ext>\d{1,3}))?$` when no task flag is given | A Go (RE2) regular expression with a named group `base`. A named group `ext` is optional. | At most 200 bytes | Recognizes task IDs. See below. |
 | `task_mode` | `--tasks` | `custom` when no task flag is given or `--task-pattern` is given alone; empty on projects created before schema version 4 | `auto`, `jira`, `linear`, `github`, `custom` (or empty on old projects) | One of the values | How tasks are numbered. Empty on existing projects, which keep using `task_pattern` only. |
@@ -103,5 +103,6 @@ database: /Users/example/Project/tidepool/.cairn/cairn.db
 ## Immutability
 
 - The `project` row is protected by immutability triggers. No command changes it.
-- To change a value, create a new project with the new configuration and import the notes. `import` validates each note against the receiving project's `repos` and `task_pattern`, so a note that does not fit is refused.
+- Repos can now be added: `cairn init --project <parent> --repo <name>` adds `<name>` to the parent's repos when it is missing (at most 50 in all). The `project` row itself does not change; the added repos are recorded as `repo_added` events (see `storage.md`). Every other value still cannot change. A child's repo name follows the repo-name rule above; the project name of a local child (`--name`, default the repo name) follows the project-name rule of `name`.
+- To change any other value, create a new project with the new configuration and import the notes. `import` validates each note against the receiving project's `repos` and `task_pattern`, so a note that does not fit is refused.
 - `cairn context` shows the values. `cairn context --json` prints the project object with the keys `name`, `mode`, `context`, `repos`, `default_repo`, `task_pattern`, and, when set, `task_mode`, `task_prefix`, `task_url`.

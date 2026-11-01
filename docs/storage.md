@@ -52,6 +52,8 @@ Lists every project registered on this machine. Machine-mode projects need it to
 | `projects[].name` | string | Project name. |
 | `projects[].mode` | string | `project` or `machine`. |
 | `projects[].path` | string | Absolute project folder, with symbolic links resolved at registration. |
+| `projects[].id` | string | Optional. The project id (`p-` followed by 10 characters), copied from the database by `init` and `project add`. |
+| `projects[].children` | object | Optional. Child name to the absolute folder of that child on this machine, set by `init --project` and `project link`, removed by `project unlink`. |
 
 - A missing registry file means no projects.
 - A corrupt file or an unsupported version is an error (exit 1). The file is not modified.
@@ -68,6 +70,7 @@ Used by every command that opens a project. Commands never create a project whil
    - Project mode without `.cairn/cairn.db` at the registered path: exit 4.
 2. Otherwise, start in the current directory (with symbolic links resolved) and walk up toward the filesystem root. In each directory, in this order:
    - a valid project-mode store `.cairn/cairn.db` here: that project;
+   - else a pointer `.cairn/links.json` here (an attached child): the parent project, with this folder's repo as the default repo; accepted only under the conditions in `security.md`;
    - else a machine-mode registration whose path is this directory: that project;
    - else go to the parent.
    The nearest directory wins. In one directory, `.cairn` wins over a machine registration.
@@ -96,6 +99,8 @@ Machine-mode databases under `<home>/projects/<name>/` get no ownership or permi
 |---|---|
 | `<root>/.cairn/` | `0700` |
 | `<root>/.cairn/cairn.db` | `0600` |
+| `<root>/.cairn/links.json` (attached child) | `0600` |
+| `<root>/.cairn/cairn.db.v3.bak`, `.v4.bak` | `0600` |
 | `<home>/` | `0700` |
 | `<home>/projects/<name>/` | `0700` |
 | `<home>/projects/<name>/cairn.db` | `0600` |
@@ -113,8 +118,47 @@ Modes are set at creation. The process umask can only make them narrower.
 - Each write transaction starts immediately, taking the write lock at the start.
 - Busy timeout: **5000 ms**. A writer that finds the database locked waits up to 5 seconds, then fails.
 - Foreign keys on. `trusted_schema` off.
-- Schema version: **4** (`PRAGMA user_version = 4`).
-- Migration: a version 3 database is upgraded to 4 when it is opened. Before anything is copied or changed, the version 3 database must pass the same checks as below, against the version 3 schema (integrity, the ten triggers, the exact schema); a database that fails is refused and left byte-for-byte unchanged, with no backup. Then cairn copies the file to `<database>.v3.bak` next to the database (mode `0600`, overwritten if present; do not commit it, and delete it once you no longer need it); if the copy fails, the database is not touched and the command fails with an error that mentions the backup. The upgrade only adds columns and runs in one transaction; two processes opening the same file at once both succeed and the columns are added once. Databases older than version 3 are not supported.
+- Schema version: **5** (`PRAGMA user_version = 5`).
+- Migration: a version 3 or 4 database is upgraded to 5 when it is opened, as one chain: 3 to 4 (adds columns), then 4 to 5 (adds the `link_events` table and its triggers; no row is read or changed). A version 3 file opened by this build ends at 5 and gets one `.v3.bak`; a version 4 file gets one `.v4.bak`. Before anything is copied or changed, the old database must pass the same checks as below, against its own schema (integrity, the immutability triggers, the exact schema); a database that fails is refused and left byte-for-byte unchanged, with no backup. Then cairn copies the file to `<database>.v<old version>.bak` next to the database (mode `0600`, overwritten if present; do not commit it, and delete it once you no longer need it); if the copy fails, the database is not touched and the command fails with an error that mentions the backup. The upgrade runs in one transaction; two processes opening the same file at once both succeed and the changes are made once. Databases older than version 3 are not supported.
+- Backups are not for the repository. `init` of a project-mode database (and of a local child) makes sure `<root>/.gitignore` contains the line `.cairn/*.bak`. This is not retroactive: add the line by hand to a project created earlier.
+- A database at a newer version than the build is refused (`unsupported database version`); an older binary therefore refuses a version 5 database.
+
+### The `link_events` table
+
+Version 5 records how a project is linked to other repos in `link_events`, an append-only log. Update, delete and replace are blocked by the triggers `link_events_no_update`, `link_events_no_delete` and `link_events_no_replace`, like the other content tables.
+
+| Column | Meaning |
+|---|---|
+| `seq` | Order of the event. |
+| `kind` | One of `id`, `repo_added`, `child_linked`, `child_detached`, `parent_set`, `parent_cleared`. |
+| `name` | A child or parent project name, for the kinds that have one. |
+| `repo` | A repo name, for the kinds that have one. |
+| `child_kind` | `attached`, `local`, or empty. |
+| `parent_id` | The parent's project id, for `parent_set`; empty otherwise. |
+
+- The current state (project id, added repos, active children, parent) is the replay of the events in `seq` order. The `project` row never changes: repos added by a child are the original repos plus the `repo_added` events, never more than 50.
+- Events hold names, repo names and project ids only. They never hold a path; paths live in the registry of each machine.
+- Replaying validates every value (child and project names, repo names, ids). An event with an invalid value refuses the database and the error names its `seq`.
+
+### Reading a child database
+
+A parent reads the databases of its local children, read-only, through a variant of open that makes every check of a normal open but never migrates, never writes a backup and never writes at all. A child on an older schema counts as missing: the parent skips it with a warning that tells you to run any cairn command inside that repo (for example `cairn --project <child> context`), which migrates it there. A parent never writes to or migrates a child database.
+
+### The attached-child pointer
+
+An attached child has no database. Its folder holds `.cairn/links.json` (mode `0600`, in a `0700` folder):
+
+```json
+{"parent": "tidepool", "parent_id": "p-0a1b2c3d4e", "repo": "web"}
+```
+
+| Key | Meaning |
+|---|---|
+| `parent` | Name of the parent project. |
+| `parent_id` | The parent's project id. |
+| `repo` | The repo name of this folder; also the child's name. |
+
+The file never holds a path. A command run in the folder follows it only when the machine registry holds this folder under the parent's `children` and the ids match (see `security.md`). A fresh clone therefore needs `cairn project link <child> <path>` before it works. Child modes: `attached` (a pointer and no database) and `local` (a database of its own, with the parent recorded in its events).
 
 ### Only `init` creates a database
 
@@ -124,11 +168,11 @@ Modes are set at creation. The process umask can only make them narrower.
 
 ### Verification on every open
 
-Before any command runs, the database must pass every check. Failure refuses the database (exit 1) and changes nothing: for a version 3 database the checks run against the version 3 schema before the backup and the upgrade, and again against the version 4 schema after.
+Before any command runs, the database must pass every check. Failure refuses the database (exit 1) and changes nothing: for an older database the checks run against its own schema before the backup and the upgrade, and again against the version 5 schema after.
 
-1. `PRAGMA user_version` equals `4`, after any migration described above. Otherwise: `unsupported database version <n>`; for a version newer than the build, the message ends with `; run 'cairn update' to upgrade`.
+1. `PRAGMA user_version` equals `5`, after any migration described above. Otherwise: `unsupported database version <n>`; for a version newer than the build, the message ends with `; run 'cairn update' to upgrade`.
 2. `PRAGMA quick_check(1)` returns `ok`.
-3. All ten immutability triggers exist with the exact SQL cairn creates. Otherwise: `immutability trigger <name> is missing` or `was altered`.
+3. Every immutability trigger exists (update, delete and replace for each content table, `link_events` included) with the exact SQL cairn creates. Otherwise: `immutability trigger <name> is missing` or `was altered`.
 4. Every object in `sqlite_master` (tables, indexes, triggers, and the full-text search index) matches the expected definition exactly. An extra, missing, or altered object refuses the database.
 5. The `project` table has exactly one row.
 
@@ -148,3 +192,5 @@ Before any command runs, the database must pass every check. Failure refuses the
 | `cairn project move <name> <new-path>` | Changes the registered path. For project mode, `<new-path>/.cairn/cairn.db` must exist. |
 | `cairn project add <path>` | Registers a project-mode database found at `<path>`. |
 | `cairn project remove <name>` | Unregisters. Never deletes a database. |
+| `cairn project link <child> <path>` | Records the folder of a child of the project (registry only). |
+| `cairn project unlink [<child>]` | Detaches a child. Never deletes a database or a note. |

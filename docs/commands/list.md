@@ -58,6 +58,8 @@ Decisions superseded by a later note show `(superseded by ...)`. A note without 
 
 When the project is the parent of local children (see `cairn project link`), `list` also reads each active local child, read-only. The same filters apply to every database; `--task` is read with each project's own task pattern, and a child whose pattern does not accept the value contributes nothing. Results are merged newest first, and `--max` applies after merging; the `... N more` count adds up every database. A line from a child ends with `  [<child>]`; with `--json` the array keeps its shape and a child entry gains the key `child`. Reading goes one way, parent to child: `list` run inside a local child shows only that child's entries. A child that cannot be read is skipped with a `cairn: warning: ...` line on standard error that names the command to run (`cairn project link --project <parent> <name> <path>`); the exit code is not affected.
 
+`--task` is first checked against the current project's task pattern: when that pattern rejects it, `list` exits 2, before any child is read.
+
 ## Exit codes
 
 - `0`: printed (including `no entries`).

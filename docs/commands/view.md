@@ -73,6 +73,7 @@ A parent opens each of its active local children read-only and merges their note
 - A child that cannot be read (its folder is not known on this machine, it has no database, it holds a different project, or its schema is older than this build) is skipped and one line goes to standard error, naming the command to run, for example `cairn: warning: local child web of tidepool was not read: ...; to point to it, run: cairn project link --project tidepool web <path>`. The site is still written and the exit code is unchanged.
 - Page files are named after note IDs. When two sources hold the same note ID (for example a copied database), `view` exits 1 with `cairn: cannot write the site: note <id> is in both project <parent> and child <name>` and writes no file.
 - Child names and every other stored value are escaped in the HTML and in the data embedded in the pages, and cleaned of terminal control characters, like all other text.
+- In the task filter, a child's tasks are grouped with the parent's task pattern.
 
 ## Exit codes
 
