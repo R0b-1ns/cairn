@@ -159,7 +159,11 @@ func initChild(c *Ctx, parentName, repo, name string, local bool, path, context 
 	createdDir := statErr != nil
 	linked := false
 	parentSet := false
+	gitignoreCreated := false
 	cleanup := func() {
+		if gitignoreCreated {
+			removeCreatedGitignore(root)
+		}
 		if adopt && parentSet {
 			if err := cs.ClearParent(); err != nil {
 				fmt.Fprintf(c.Stderr, "cairn: warning: could not clear the parent of %s (%s); run in that folder: cairn project unlink\n", sanitize(name), sanitize(err.Error()))
@@ -196,6 +200,19 @@ func initChild(c *Ctx, parentName, repo, name string, local bool, path, context 
 		if cs, err = store.Create(childDB, child); err != nil {
 			cleanup()
 			return fail(c, ExitRuntime, "%s", sanitize(err.Error()))
+		}
+	}
+	var gitignoreNote string
+	if local {
+		// The line is printed with the other output, after the steps that can still fail.
+		changed, created, gerr := applyGitignore(root)
+		gitignoreCreated = created
+		switch {
+		case gerr != nil:
+			warnf(c, "could not update .gitignore (%s); add the line %s to %s by hand so database backups are not committed",
+				sanitize(gerr.Error()), bakIgnoreLine, sanitize(filepath.Join(root, ".gitignore")))
+		case changed:
+			gitignoreNote = fmt.Sprintf(".gitignore now ignores %s\n", bakIgnoreLine)
 		}
 	}
 	pid, err := parent.EnsureProjectID()
@@ -271,6 +288,7 @@ func initChild(c *Ctx, parentName, repo, name string, local bool, path, context 
 		fmt.Fprintf(c.Stdout, "attached %s to project %s as repo %s\npointer: %s\n",
 			sanitize(root), sanitize(parentName), sanitize(repo), sanitize(filepath.Join(dotCairn, "links.json")))
 	}
+	fmt.Fprint(c.Stdout, gitignoreNote)
 	if loc.Mode == model.ModeProject {
 		fmt.Fprintf(c.Stdout, "the parent database %s changed (link events); commit it so your team gets the link\n", sanitize(loc.DBPath))
 	}

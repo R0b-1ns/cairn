@@ -185,6 +185,9 @@ func defineInit(fs *flag.FlagSet) Handler {
 			return fail(c, ExitRuntime, "%v", err)
 		}
 		fmt.Fprintf(c.Stdout, "initialized project %s (%s mode) at %s\ndatabase: %s\n", p.Name, p.Mode, root, dbPath)
+		if p.Mode == model.ModeProject {
+			ignoreBackups(c, root)
+		}
 		if legacy {
 			fmt.Fprintln(c.Stderr, "cairn: note: task numbering was not chosen; using the default TP-03 format (see --tasks)")
 		}

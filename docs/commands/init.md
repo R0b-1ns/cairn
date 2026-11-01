@@ -96,6 +96,10 @@ initialized project tidepool (project mode) at /work/tidepool
 database: /work/tidepool/.cairn/cairn.db
 ```
 
+In project mode, `init` also makes sure `<root>/.gitignore` contains the line `.cairn/*.bak`, so the backups that migrations write next to the database (`cairn.db.v3.bak`, `cairn.db.v4.bak`) are never committed. It creates the file when absent, appends the line (after a newline if the file did not end with one) when missing, and does nothing when the line is already there; it never removes or reorders other lines, and it refuses a `.gitignore` that is a symlink or not a regular file. When it changed the file it prints `.gitignore now ignores .cairn/*.bak`. If it cannot update the file, `init` still succeeds (exit 0) and writes `cairn: warning: could not update .gitignore ...` on standard error, telling you to add `.cairn/*.bak` by hand. The same applies to a local child (`--project ... --local`, including when it adopts an existing database); an attached child has no database and a machine-mode project keeps its database outside the folder, so neither touches `.gitignore`. If a local child's `init` fails and is rolled back, a `.gitignore` that this call created is removed (only while it still holds just that line); lines you already had are never removed.
+
+This is not retroactive: databases created before this behaviour need the line `.cairn/*.bak` added to `.gitignore` by hand.
+
 Machine mode prints `(machine mode)` and the database path under the data directory, `<data directory>/projects/tidepool/cairn.db`.
 
 ## Exit codes
