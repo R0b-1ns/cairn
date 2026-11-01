@@ -5,7 +5,7 @@ Adds an addendum to an existing note. The note itself never changes.
 ## Usage
 
 ```
-cairn amend <note-id> --agent NAME --model MODEL [--status STATUS] [--change TEXT]... [--decision TEXT]... [--open TEXT]... [--note TEXT]... [--helper TEXT]... [--resolves ID]... [--supersedes ID]... [--project NAME] [--json]
+cairn amend <note-id> --agent NAME --model MODEL [--status STATUS] [--change TEXT]... [--decision TEXT]... [--open TEXT]... [--note TEXT]... [--helper TEXT]... [--resolves ID]... [--supersedes ID]... [--ref URL] [--author "Name <email>"] [--branch NAME] [--project NAME] [--json]
 cairn amend <note-id> --stdin [--project NAME] [--json]
 ```
 
@@ -29,11 +29,14 @@ cairn amend <note-id> --stdin [--project NAME] [--json]
 | `--helper` | (empty) | text: path and purpose | A reusable building block. Repeatable. |
 | `--resolves` | (empty) | ID of an open entry, `e-...`, in any note | Closes that open point. Repeatable. |
 | `--supersedes` | (empty) | ID of a decision entry, `e-...`, in any note | Replaces that decision. Repeatable. |
+| `--ref` | (empty) | URL starting with `http://` or `https://`, at most 500 characters | Link to the ticket this work belongs to. Optional. Use it to link a ticket later. |
+| `--author` | (empty) | `Name <email>`; name at most 80 characters, email at most 120, one line | Author of the addendum. Default: env `CAIRN_AUTHOR`, then git `user.name` and `user.email` of the current directory. A value read from env is refused when invalid (exit 3); an invalid value read from git is dropped with a warning on standard error. Without `<...>` the whole text is the name. |
+| `--branch` | (empty) | one line, at most 200 characters | Branch the work was done on. Default: the current git branch of the current directory; empty on a detached HEAD or outside a repository. An invalid git value is dropped with a warning; an invalid `--branch` is refused (exit 3). |
 | `--stdin` | `false` | flag, no value | Read the addendum as one JSON object from standard input. Only `--project` and `--json` may be combined with it. |
 | `--project` | (empty) | a registered project name | Project to write to. Default: found from the current directory, or env `CAIRN_PROJECT`. |
 | `--json` | `false` | flag, no value | Print the saved addendum as JSON. |
 
-With `--stdin` the JSON object uses the keys `agent`, `model`, `status`, `entries` (objects with `type`, `text`, and `by` for decisions), `resolves`, `supersedes`. `note_id` must not be given; the note is the argument. `id` and `at` must be absent.
+With `--stdin` the JSON object uses the keys `agent`, `model`, `status`, `entries` (objects with `type`, `text`, and `by` for decisions), `resolves`, `supersedes`, and optionally `ref`, `author_name`, `author_email`, `branch` (missing author and branch are filled as for the flags). `note_id` must not be given; the note is the argument. `id` and `at` must be absent.
 
 ## Output
 
@@ -46,14 +49,14 @@ addendum a-9x3b2c added to n-4k7q2m
 
 The second line lists each entry of the addendum by ID and type. An addendum with only `--status`, `--resolves` or `--supersedes` prints the first line only.
 
-`--json` prints the saved addendum: `id`, `note_id`, `agent`, `model`, `at`, and `status`, `entries`, `resolves`, `supersedes` when set.
+`--json` prints the saved addendum: `id`, `note_id`, `agent`, `model`, `at`, and `status`, `entries`, `resolves`, `supersedes`, `author_name`, `author_email`, `branch`, `ref` when set.
 
 ## Exit codes
 
 - `0`: addendum saved.
 - `1`: runtime error, or the note ID does not exist in the project (`note n-... not found`).
 - `2`: usage error: not exactly one argument, or `--stdin` combined with an addendum flag.
-- `3`: invalid input, listed on standard error. Includes an empty addendum, a missing `--agent` or `--model`, and a `--resolves` or `--supersedes` ID that does not exist.
+- `3`: invalid input, listed on standard error. Includes an invalid `--ref`, `--author` or `--branch`, an empty addendum, a missing `--agent` or `--model`, and a `--resolves` or `--supersedes` ID that does not exist.
 - `4`: no project found.
 
 ## Examples
@@ -76,9 +79,15 @@ cairn amend n-4k7q2m --agent builder --model claude-opus-5-5 --status blocked
 
 Sets the note's current status to `blocked` with an addendum that has no entries. Exit code 0.
 
+```
+cairn amend n-4k7q2m --agent human --model none --ref https://github.com/acme/tidepool/issues/12
+```
+
+Links the note to a ticket after the fact. Prints `addendum a-9x3b2c added to n-4k7q2m`. Exit code 0.
+
 ## Notes
 
-- The addendum must carry at least one of: an entry, `--status`, `--resolves`, `--supersedes`. Otherwise exit code 3.
+- The addendum must carry at least one of: an entry, `--status`, `--ref`, `--resolves`, `--supersedes`. Otherwise exit code 3.
 - The note ID is a positional argument. `amend` cannot create a note; use `cairn add`.
 - Resolving and superseding work across notes: the target entry may belong to any note.
 - A resolved open point is hidden from `list` and `brief` by default; the original text stays readable with `cairn show`.

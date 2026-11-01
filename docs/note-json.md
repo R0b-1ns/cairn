@@ -28,11 +28,11 @@ The JSON shapes cairn reads and writes. Used by `cairn add --stdin`, `cairn amen
 | `commits` | array of strings | no | Lowercase hex, 7-64 characters; at most 50 items | Commit hashes. |
 | `resolves` | array of strings | no | Entry IDs `e-...` of `open` entries; at most 50 items | Open entries this note closes. |
 | `supersedes` | array of strings | no | Entry IDs `e-...` of `decision` entries; at most 50 items | Decisions this note replaces. |
-| `author_name` | string | no | One line, no control characters; at most 80 characters | Who wrote the note. Stored since schema version 4. |
-| `author_email` | string | no | One line, no control characters; at most 120 characters | Email of the author. Stored since schema version 4. |
-| `branch` | string | no | One line, no control characters; at most 200 characters | Branch the work was done on. Stored since schema version 4. |
-| `ref` | string | no | Starts with `http://` or `https://`; at most 500 characters | Link to the ticket. Stored since schema version 4. |
-| `new_task` | boolean | no | `true` or `false`; input only | Asks for the next task number. Never stored. |
+| `author_name` | string | no | One line, no control characters; at most 80 characters | Who wrote the note. Set by cairn at write time from `--author`, env `CAIRN_AUTHOR` or git `user.name`, unless given. |
+| `author_email` | string | no | One line, no control characters; at most 120 characters | Email of the author. Set by cairn at write time from `--author`, env `CAIRN_AUTHOR` or git `user.email`, unless given. |
+| `branch` | string | no | One line, no control characters; at most 200 characters | Branch the work was done on. Set by cairn at write time from `--branch` or the current git branch, unless given; empty on a detached HEAD. |
+| `ref` | string | no | Starts with `http://` or `https://`; at most 500 characters | Link to the ticket. Never set by cairn; given with `--ref` or in JSON. An addendum may carry only a `ref`. |
+| `new_task` | boolean | no | `true` or `false`; `add` input only | `true` asks cairn to assign the next task number of the project. Needs a project in `auto` mode (otherwise exit 2) and no `task` in the same object (otherwise exit 3). Never stored or exported. |
 
 Refused on `add`:
 
@@ -79,10 +79,10 @@ cairn add --stdin --project tidepool < note.json
 | `entries` | array of entry objects | no | 0-100 items | Content of the addendum. |
 | `resolves` | array of strings | no | Entry IDs `e-...` of `open` entries; at most 50 items | Open entries, in any note, this addendum closes. |
 | `supersedes` | array of strings | no | Entry IDs `e-...` of `decision` entries; at most 50 items | Decisions, in any note, this addendum replaces. |
-| `author_name` | string | no | One line, no control characters; at most 80 characters | Who wrote the addendum. Stored since schema version 4. |
-| `author_email` | string | no | One line, no control characters; at most 120 characters | Email of the author. Stored since schema version 4. |
-| `branch` | string | no | One line, no control characters; at most 200 characters | Branch the work was done on. Stored since schema version 4. |
-| `ref` | string | no | Starts with `http://` or `https://`; at most 500 characters | Link to the ticket. Stored since schema version 4. |
+| `author_name` | string | no | One line, no control characters; at most 80 characters | Who wrote the addendum. Set by cairn at write time from `--author`, env `CAIRN_AUTHOR` or git `user.name`, unless given. |
+| `author_email` | string | no | One line, no control characters; at most 120 characters | Email of the author. Set by cairn at write time from `--author`, env `CAIRN_AUTHOR` or git `user.email`, unless given. |
+| `branch` | string | no | One line, no control characters; at most 200 characters | Branch the work was done on. Set by cairn at write time from `--branch` or the current git branch, unless given; empty on a detached HEAD. |
+| `ref` | string | no | Starts with `http://` or `https://`; at most 500 characters | Link to the ticket. Never set by cairn; given with `--ref` or in JSON. An addendum may carry only a `ref`. |
 
 The addendum must carry at least one of: `entries`, `status`, `resolves`, `supersedes`. Otherwise: `addendum: is empty`.
 

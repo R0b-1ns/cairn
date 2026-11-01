@@ -21,6 +21,10 @@ Reads stop at the limit plus one byte, so an oversized input is never held in me
 | `agent` | 80 | characters | yes, not blank | one line |
 | `model` | 80 | characters | yes, not blank | one line |
 | `task` | 80 | characters | no | one line |
+| `author_name` | 80 | characters | no | one line |
+| `author_email` | 120 | characters | no | one line |
+| `branch` | 200 | characters | no | one line |
+| `ref` | 500 | characters | no | one line, starts with `http://` or `https://` |
 | `task_pattern` | 200 | **bytes** | (set by `init`) | a regular expression |
 | project `name` | 40 | characters | yes | must match `^[a-z0-9][a-z0-9_-]{0,39}$` |
 | repo (in `repos`) | 40 | characters | yes, at least one repo | must match `^[a-z0-9][a-z0-9._-]{0,39}$` |
