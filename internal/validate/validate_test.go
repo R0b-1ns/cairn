@@ -516,3 +516,65 @@ func TestProjectDefaultRepo(t *testing.T) {
 		t.Errorf("an empty default repo is allowed: %v", errs)
 	}
 }
+
+func TestValidateNewFields(t *testing.T) {
+	n := validNote()
+	n.Branch = "feat/x\x01"
+	if findField(Note(n, tidepool(), Options{}), "branch") == nil {
+		t.Error("control character in branch should fail")
+	}
+	n = validNote()
+	n.Ref = "https://x/" + strings.Repeat("a", 500)
+	if findField(Note(n, tidepool(), Options{}), "ref") == nil {
+		t.Error("long ref should fail")
+	}
+	n.Ref = "ftp://x"
+	if findField(Note(n, tidepool(), Options{}), "ref") == nil {
+		t.Error("ftp ref should fail")
+	}
+	n = validNote()
+	n.AuthorName, n.AuthorEmail, n.Branch, n.Ref = "Ann", "ann@x.io", "main", "https://x/pr/1"
+	if errs := Note(n, tidepool(), Options{}); len(errs) != 0 {
+		t.Errorf("valid fields rejected: %v", errs)
+	}
+	n.AuthorName = strings.Repeat("a", 81)
+	if findField(Note(n, tidepool(), Options{}), "author_name") == nil {
+		t.Error("long author_name should fail")
+	}
+
+	a := model.Addendum{NoteID: "n-abcdef", Agent: "builder", Model: "claude-test", At: "2026-10-30T10:00:00Z", Ref: "https://x/pr/2"}
+	if errs := Addendum(a, Options{}); len(errs) != 0 {
+		t.Errorf("addendum with only ref rejected: %v", errs)
+	}
+	a.Ref = "ftp://x"
+	if findField(Addendum(a, Options{}), "ref") == nil {
+		t.Error("addendum ftp ref should fail")
+	}
+
+	p := tidepool()
+	p.TaskURL = "https://x/browse/"
+	if findField(Project(p), "task_url") == nil {
+		t.Error("template without {task} should fail")
+	}
+	p.TaskURL = "ftp://x/{task}"
+	if findField(Project(p), "task_url") == nil {
+		t.Error("non-http template should fail")
+	}
+	p.TaskURL = "https://x/browse/{task}"
+	if errs := Project(p); len(errs) != 0 {
+		t.Errorf("valid url rejected: %v", errs)
+	}
+	p.TaskMode = "bogus"
+	if findField(Project(p), "task_mode") == nil {
+		t.Error("unknown mode should fail")
+	}
+	p.TaskMode = "auto"
+	p.TaskPrefix = "t"
+	if findField(Project(p), "task_prefix") == nil {
+		t.Error("bad prefix should fail")
+	}
+	p.TaskMode, p.TaskPrefix = "jira", "T"
+	if findField(Project(p), "task_prefix") == nil {
+		t.Error("prefix outside auto should fail")
+	}
+}
