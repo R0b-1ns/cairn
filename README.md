@@ -22,6 +22,8 @@ curl -fsSL https://raw.githubusercontent.com/R0b-1ns/cairn/main/scripts/install.
 
 Set `CAIRN_VERSION=v1.0.1` to pin a release and `CAIRN_INSTALL_DIR=/some/dir` to choose the destination. To do it by hand, download `cairn-<os>-<arch>` and `SHA256SUMS` from the release page, check the hash with `shasum -a 256 -c` (`sha256sum -c` on Linux), then `chmod +x` it and move it onto your `PATH`.
 
+To upgrade later, run `cairn update` (`cairn update --check` only tells you whether a newer release exists). It downloads the latest release, checks it against `SHA256SUMS`, and replaces the binary in place; if the binary lives in a folder you cannot write to, use `sudo cairn update`.
+
 Supported platforms: macOS and Linux, on amd64 and arm64. With Go 1.27 or newer you can also build from source: `go install github.com/R0b-1ns/cairn/cmd/cairn@latest`.
 
 ## Quick start
