@@ -1,6 +1,6 @@
 # cairn view
 
-Writes a read-only website of the project's notes, to browse and filter them in a browser. It never changes the database, apart from the one-time schema 3 to 4 migration that every command performs when it opens an older database (see `storage.md`).
+Writes a read-only website of the project's notes, to browse and filter them in a browser. When the project has local children (see `project.md`), their notes are part of the site. It never changes the database, apart from the one-time schema 3 to 4 migration that every command performs when it opens an older database (see `storage.md`).
 
 ## Usage
 
@@ -64,10 +64,20 @@ Each note has a Markdown download, the same text as `cairn export --format md`, 
 
 The pages work when opened straight from disk (`file://`) with no server, so `--serve` is optional.
 
+## Local children
+
+A parent opens each of its active local children read-only and merges their notes, newest first, with its own. The direction is parent to child only: a child's `view` shows only its own notes, and `view` never writes to a child's database. Attached children need nothing: their notes already are in the parent's database.
+
+- The Notes table and the Decisions, Open points and Helpers tables get a Child column, and every view gets a Child filter, only when at least one note comes from a child. A project without local children produces the same site as before. The current project's own rows show `-` in the Child column. The Child column sorts like the others, the text filter also searches the child name, and the filter offers only the children that have rows in the view.
+- A note page shows its child on the card. A note downloaded from a child starts with `# child: <name>`, and a downloaded list of entries marks an entry of a child with `child <name>` inside the parentheses after the note.
+- A child that cannot be read (its folder is not known on this machine, it has no database, it holds a different project, or its schema is older than this build) is skipped and one line goes to standard error, naming the command to run, for example `cairn: warning: local child web of tidepool was not read: ...; to point to it, run: cairn project link --project tidepool web <path>`. The site is still written and the exit code is unchanged.
+- Page files are named after note IDs. When two sources hold the same note ID (for example a copied database), `view` exits 1 with `cairn: cannot write the site: note <id> is in both project <parent> and child <name>` and writes no file.
+- Child names and every other stored value are escaped in the HTML and in the data embedded in the pages, and cleaned of terminal control characters, like all other text.
+
 ## Exit codes
 
 - `0`: written (and, with `--serve`, stopped with Ctrl-C or SIGTERM).
-- `1`: runtime error: the site cannot be written (for example the `view` folder is a symlink), or the port cannot be bound.
+- `1`: runtime error: the site cannot be written (for example the `view` folder is a symlink), the port cannot be bound, or two sources hold the same note ID.
 - `2`: usage error: a positional argument, `--port` outside 0 to 65535, `--port` or `--no-open` without `--serve`.
 - `4`: no project found.
 

@@ -10,6 +10,9 @@
 <dt>Agent</dt><dd>{{.Agent}}</dd>
 <dt>Model</dt><dd>{{.Model}}</dd>
 <dt>Repo</dt><dd>{{.Repo}}</dd>
+{{- if .Child}}
+<dt>Child</dt><dd>{{.Child}}</dd>
+{{- end}}
 <dt>Impacts</dt><dd>{{if .Impacts}}{{join .Impacts ", "}}{{else}}-{{end}}</dd>
 <dt>Author</dt><dd>{{dash .Author}}</dd>
 <dt>Branch</dt><dd>{{dash .Branch}}</dd>

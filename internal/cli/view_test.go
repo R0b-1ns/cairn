@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/R0b-1ns/cairn/internal/model"
+	"github.com/R0b-1ns/cairn/internal/view"
 )
 
 // seedView adds two notes of different tasks, one with an addendum, and returns their IDs.
@@ -477,5 +478,120 @@ func TestViewShowsBranchAuthorAndRef(t *testing.T) {
 	}
 	if !strings.Contains(read("data.js"), "ref: https://tracker.example/TP-03") {
 		t.Error("data.js lacks the ref in the note markdown")
+	}
+}
+
+// viewChildFixture is a parent with one local child holding a note each.
+func viewChildFixture(t *testing.T) (childFixture, string, string) {
+	t.Helper()
+	f := newChildFixture(t, true)
+	fixClock(t)
+	f.addNote(t, f.e.root, "Parent note")
+	f.addNote(t, f.child, "Child note")
+	return f, "Parent note", "Child note"
+}
+
+func TestViewIncludesChildren(t *testing.T) {
+	f, _, _ := viewChildFixture(t)
+	r := f.e.runIn(f.e.root, "", "view")
+	if r.code != ExitOK {
+		t.Fatalf("view: %+v", r)
+	}
+	dir := filepath.Join(f.e.root, ".cairn", "view")
+	idx, _ := os.ReadFile(filepath.Join(dir, "index.html"))
+	for _, want := range []string{"Parent note", "Child note", `data-sort="child"`, `id="f-child"`, `data-child="web"`} {
+		if !strings.Contains(string(idx), want) {
+			t.Errorf("index.html lacks %q", want)
+		}
+	}
+	data, _ := os.ReadFile(filepath.Join(dir, "data.js"))
+	if !strings.Contains(string(data), "Child note") {
+		t.Errorf("data.js lacks the child note")
+	}
+	// Without a link the site has no Child column.
+	e := newAddEnv(t)
+	seedView(t, e)
+	if r := e.run("view"); r.code != ExitOK {
+		t.Fatalf("view: %+v", r)
+	}
+	plain, _ := os.ReadFile(filepath.Join(e.root, ".cairn", "view", "index.html"))
+	if strings.Contains(strings.ToLower(string(plain)), "child") {
+		t.Errorf("column shown without children")
+	}
+}
+
+func TestViewWarnsAboutMissingChild(t *testing.T) {
+	f, _, _ := viewChildFixture(t)
+	reg, _ := openRegistry(&Ctx{Getenv: f.e.getenv})
+	if err := reg.RemoveChild("tidepool", "web"); err != nil {
+		t.Fatal(err)
+	}
+	r := f.e.runIn(f.e.root, "", "view")
+	if r.code != ExitOK || !strings.HasPrefix(r.err, "cairn: warning") || !strings.Contains(r.err, "cairn project link --project tidepool web") {
+		t.Fatalf("view: %+v", r)
+	}
+	idx, _ := os.ReadFile(filepath.Join(f.e.root, ".cairn", "view", "index.html"))
+	if strings.Contains(string(idx), "Child note") {
+		t.Errorf("missing child's note shown")
+	}
+}
+
+func TestViewRefusesDuplicateNoteIDs(t *testing.T) {
+	f, _, _ := viewChildFixture(t)
+	// Copy the parent's note row into the child with the same ID, through a raw handle.
+	parent, err := sqlOpenRaw(filepath.Join(f.e.root, ".cairn", "cairn.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var id string
+	if err := parent.QueryRow(`SELECT id FROM notes LIMIT 1`).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	parent.Close()
+	child, err := sqlOpenRaw(filepath.Join(f.child, ".cairn", "cairn.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	child.SetMaxOpenConns(1)
+	var cid string
+	child.QueryRow(`SELECT id FROM notes LIMIT 1`).Scan(&cid)
+	rows, _ := child.Query(`SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND tbl_name IN ('notes','entries','addenda','links')`)
+	var names, sqls []string
+	for rows.Next() {
+		var n, q string
+		rows.Scan(&n, &q)
+		names, sqls = append(names, n), append(sqls, q)
+	}
+	rows.Close()
+	for _, n := range names {
+		child.Exec(`DROP TRIGGER ` + n)
+	}
+	child.Exec(`PRAGMA foreign_keys = OFF`)
+	for _, q := range []string{`UPDATE notes SET id = ? WHERE id = ?`, `UPDATE entries SET note_id = ? WHERE note_id = ?`} {
+		if _, err := child.Exec(q, id, cid); err != nil {
+			t.Fatalf("raw update: %v", err)
+		}
+	}
+	for _, q := range sqls {
+		if _, err := child.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	child.Close()
+	r := f.e.runIn(f.e.root, "", "view")
+	if r.code != ExitRuntime || !strings.Contains(r.err, id) || !strings.Contains(r.err, "web") || !strings.Contains(r.err, "tidepool") {
+		t.Fatalf("view: %+v", r)
+	}
+	if exists(filepath.Join(f.e.root, ".cairn", "view")) {
+		t.Errorf("a file was written")
+	}
+}
+
+func TestViewSanitizesChildName(t *testing.T) {
+	site := &view.Site{Project: model.Project{Name: "p"}, Notes: []view.NoteView{{Child: "ev\x1b[2Jil‮"}},
+		Entries: []view.EntryRow{{Child: "ev\x1b[2Jil‮"}}}
+	sanitizeSite(site)
+	if site.Notes[0].Child != "evil" || site.Entries[0].Child != "evil" {
+		t.Errorf("child %q %q", site.Notes[0].Child, site.Entries[0].Child)
 	}
 }

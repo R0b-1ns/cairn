@@ -3,6 +3,9 @@
 package view
 
 import (
+	"fmt"
+	"sort"
+
 	"github.com/R0b-1ns/cairn/internal/model"
 	"github.com/R0b-1ns/cairn/internal/store"
 )
@@ -13,6 +16,7 @@ type EntryRow struct {
 	Agent string // agent that wrote the entry (the addendum's agent for addendum entries)
 	// Branch and the author are those of the note or addendum that holds the entry.
 	Branch, AuthorName, AuthorEmail string
+	Child                           string // the local child the entry comes from; empty for the current project
 }
 
 // NoteView is one note with everything the site shows about it.
@@ -24,6 +28,7 @@ type NoteView struct {
 	OpenPoints int                        // open entries of the note and its addenda not yet resolved
 	States     map[string]store.EntryInfo // entry ID -> state, for every entry of the note and its addenda
 	Markdown   string                     // filled by the caller (cli), notes part only
+	Child      string                     // the local child the note comes from; empty for the current project
 	// TaskRefs are the refs stored anywhere for the note's task (base), newest first.
 	// The note's own branch, author and ref are in Note and Header; the addenda's in Addenda.
 	TaskRefs []string
@@ -125,4 +130,85 @@ func (s *Site) EntriesOf(t model.EntryType) []EntryRow {
 		}
 	}
 	return out
+}
+
+// Source is one database CollectAll reads. Child is empty for the current
+// project and the child's name otherwise.
+type Source struct {
+	Child string
+	St    *store.Store
+	Proj  model.Project
+}
+
+// DuplicateNoteError says that two sources hold a note with the same ID. The
+// page files are named after note IDs, so such a site cannot be written.
+// First and Second are the sources' child names ("" is the current project).
+type DuplicateNoteError struct{ ID, First, Second string }
+
+func (e *DuplicateNoteError) Error() string {
+	name := func(c string) string {
+		if c == "" {
+			return "the current project"
+		}
+		return "child " + c
+	}
+	return fmt.Sprintf("note %s is in both %s and %s", e.ID, name(e.First), name(e.Second))
+}
+
+// CollectAll reads each source with Collect and merges the results, newest
+// first. Site.Project is the first source's project. It fails with a
+// *DuplicateNoteError when two sources hold the same note ID.
+func CollectAll(srcs []Source, generated string) (*Site, error) {
+	if len(srcs) == 0 {
+		return nil, fmt.Errorf("no source to collect")
+	}
+	var site *Site
+	owner := map[string]string{} // note ID -> child of the source that holds it
+	for i, src := range srcs {
+		part, err := Collect(src.St, src.Proj, generated)
+		if err != nil {
+			return nil, err
+		}
+		for j := range part.Notes {
+			nv := &part.Notes[j]
+			if first, dup := owner[nv.Header.ID]; dup {
+				return nil, &DuplicateNoteError{ID: nv.Header.ID, First: first, Second: src.Child}
+			}
+			owner[nv.Header.ID] = src.Child
+			nv.Child = src.Child
+		}
+		for j := range part.Entries {
+			part.Entries[j].Child = src.Child
+		}
+		if i == 0 {
+			site = part
+			continue
+		}
+		site.Notes = append(site.Notes, part.Notes...)
+		site.Entries = append(site.Entries, part.Entries...)
+	}
+	if len(srcs) > 1 {
+		sort.SliceStable(site.Notes, func(a, b int) bool {
+			return site.Notes[a].Header.At > site.Notes[b].Header.At
+		})
+		sort.SliceStable(site.Entries, func(a, b int) bool {
+			return site.Entries[a].At > site.Entries[b].At
+		})
+	}
+	return site, nil
+}
+
+// hasChildren reports whether some note or entry comes from a local child.
+func (s *Site) hasChildren() bool {
+	for _, nv := range s.Notes {
+		if nv.Child != "" {
+			return true
+		}
+	}
+	for _, e := range s.Entries {
+		if e.Child != "" {
+			return true
+		}
+	}
+	return false
 }

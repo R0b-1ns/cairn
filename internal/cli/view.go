@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -70,6 +71,7 @@ func sanitizeSite(site *view.Site) {
 	p.Name, p.Context = sanitize(p.Name), sanitize(p.Context)
 	for i := range site.Notes {
 		nv := &site.Notes[i]
+		nv.Child = sanitize(nv.Child)
 		h := &nv.Header
 		for _, f := range []*string{&h.ID, &h.Task, &h.Repo, &h.Agent, &h.Model, &h.At, &h.Title, &h.Branch, &h.AuthorName, &h.AuthorEmail, &h.Ref} {
 			*f = sanitize(*f)
@@ -113,6 +115,7 @@ func sanitizeSite(site *view.Site) {
 	}
 	for i := range site.Entries {
 		info(&site.Entries[i].EntryInfo)
+		site.Entries[i].Child = sanitize(site.Entries[i].Child)
 		for _, f := range []*string{&site.Entries[i].Agent, &site.Entries[i].Branch, &site.Entries[i].AuthorName, &site.Entries[i].AuthorEmail} {
 			*f = sanitize(*f)
 		}
@@ -156,19 +159,22 @@ func defineView(fs *flag.FlagSet) Handler {
 				s.Close()
 			}
 		}()
-		site, err := view.Collect(s.St, s.Proj, timestamp())
+		sc := openScope(c, s)
+		defer sc.Close()
+		site, err := collectViewSite(s, sc.Sources)
 		if err != nil {
-			return fail(c, ExitRuntime, "%v", err)
-		}
-		// The Markdown is rendered from the stored values, exactly as export does: it
-		// looks entries up by their stored IDs and cleans each value it prints.
-		site.MarkdownHeader = renderMarkdownHeader(s.Proj)
-		for i := range site.Notes {
-			nv := &site.Notes[i]
-			doc := exportDoc{Project: s.Proj, Notes: []model.Note{nv.Note}, Addenda: nv.Addenda}
-			if nv.Markdown, err = renderMarkdownNotes(s, doc); err != nil {
-				return fail(c, ExitRuntime, "%v", err)
+			var dup *view.DuplicateNoteError
+			if errors.As(err, &dup) {
+				name := func(child string) string {
+					if child == "" {
+						return "project " + sanitize(s.Proj.Name)
+					}
+					return "child " + sanitize(child)
+				}
+				return fail(c, ExitRuntime, "cannot write the site: note %s is in both %s and %s",
+					sanitize(dup.ID), name(dup.First), name(dup.Second))
 			}
+			return fail(c, ExitRuntime, "%v", err)
 		}
 		sanitizeSite(site)
 		dir := filepath.Join(filepath.Dir(s.St.Path()), "view")
@@ -185,7 +191,8 @@ func defineView(fs *flag.FlagSet) Handler {
 			}
 			return ExitOK
 		}
-		// The database is not needed while serving the written files.
+		// The databases are not needed while serving the written files.
+		sc.Close()
 		s.Close()
 		open = false
 		ctx, cancel := serveContext()
@@ -211,4 +218,38 @@ func defineView(fs *flag.FlagSet) Handler {
 		}
 		return ExitOK
 	}
+}
+
+// collectViewSite reads every source into one site and fills the Markdown of
+// each note from its own source, as export does. A note of a child starts with
+// the child's name, as in `export --format md`.
+func collectViewSite(s *session, sources []source) (*view.Site, error) {
+	srcs := make([]view.Source, len(sources))
+	byChild := map[string]source{}
+	for i, src := range sources {
+		srcs[i] = view.Source{Child: src.Child, St: src.St, Proj: src.Proj}
+		byChild[src.Child] = src
+	}
+	site, err := view.CollectAll(srcs, timestamp())
+	if err != nil {
+		return nil, err
+	}
+	// The Markdown is rendered from the stored values, exactly as export does: it
+	// looks entries up by their stored IDs and cleans each value it prints.
+	site.MarkdownHeader = renderMarkdownHeader(s.Proj)
+	for i := range site.Notes {
+		nv := &site.Notes[i]
+		src := byChild[nv.Child]
+		ps := &session{St: src.St, Proj: src.Proj, Reg: s.Reg, Loc: s.Loc}
+		doc := exportDoc{Project: src.Proj, Notes: []model.Note{nv.Note}, Addenda: nv.Addenda}
+		md, err := renderMarkdownNotes(ps, doc)
+		if err != nil {
+			return nil, err
+		}
+		if nv.Child != "" {
+			md = "# child: " + sanitize(nv.Child) + "\n\n" + md
+		}
+		nv.Markdown = md
+	}
+	return site, nil
 }
