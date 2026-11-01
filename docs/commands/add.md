@@ -19,8 +19,8 @@ None. A positional argument gives exit code 2.
 |---|---|---|---|
 | `--agent` | (empty) | any name, 1-80 characters | Agent name. Required in flag mode. |
 | `--repo` | (empty) | a repo listed in the project's repos | Repo the work was done in. Optional when the project has a default repo (`cairn context` shows it); otherwise required. With `--stdin`, a missing `repo` uses the default the same way. |
-| `--task` | (empty) | a task ID matching the project task pattern, e.g. `TP-03`, `TP-03.1` | Task ID. Optional. |
-| `--new-task` | `false` | flag, no value | Assigns the next task number of the project (`T-1`, `T-2`, ...). Only in a project in `auto` mode, and not together with `--task`. |
+| `--task` | (empty) | a task ID matching the project task pattern, e.g. `TP-03`, `TP-03.1` | Task ID. Optional. A value that does not fit the pattern is exit 3 and the field is listed. If the pattern changes between the check and the write, the store refuses with `task <ID> does not match the task pattern`, also exit 3. |
+| `--new-task` | `false` | flag, no value | Assigns the next task number of the project (`T-1`, `T-2`, ...). Only in a project in `auto` mode, and not together with `--task`. When the project has used every number up to the maximum (`999999`), the command exits 3 with `task numbers exhausted for prefix T (max 999999)` (the prefix is the project's own). |
 | `--ref` | (empty) | URL starting with `http://` or `https://`, at most 500 characters | Link to the ticket this work belongs to. Optional. |
 | `--author` | (empty) | `Name <email>`; name at most 80 characters, email at most 120, one line | Author of the note. Default: env `CAIRN_AUTHOR`, then git `user.name` and `user.email` of the current directory. A value read from env is refused when invalid (exit 3); an invalid value read from git is dropped with a warning on standard error. Without `<...>` the whole text is the name. |
 | `--branch` | (empty) | one line, at most 200 characters | Branch the work was done on. Default: the current git branch of the current directory; empty on a detached HEAD or outside a repository. An invalid git value is dropped with a warning; an invalid `--branch` is refused (exit 3). |
@@ -73,7 +73,7 @@ A likely secret in a text field prints a warning on standard error (`warning: po
 - `0`: note saved.
 - `1`: runtime error, for example the database cannot be opened or written.
 - `2`: usage error: a positional argument, `--stdin` combined with a note flag, `--new-task` together with `--task`, or `--new-task` in a project whose task mode is not `auto` (the message names the mode; a project from before task modes is `custom`).
-- `3`: invalid input; every bad field is listed on standard error. Includes an invalid `--author`, `--branch` or `--ref`, and `new_task` with `task` in JSON. Also an `--resolves` or `--supersedes` ID that does not exist.
+- `3`: invalid input; every bad field is listed on standard error. Includes an invalid `--author`, `--branch` or `--ref`, and `new_task` with `task` in JSON. Also an `--resolves` or `--supersedes` ID that does not exist, a `--task` the store refuses (`task <ID> does not match the task pattern`), and `--new-task` when the numbers are used up (`task numbers exhausted for prefix T (max 999999)`; the one-line form, without a field list).
 - `4`: no project found.
 
 ## Examples
