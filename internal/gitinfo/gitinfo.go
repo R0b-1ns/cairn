@@ -24,8 +24,9 @@ func run(dir string, args ...string) (string, error) {
 // Branch returns the current branch of the repository containing dir. It is
 // empty outside a repository, on a detached HEAD, or when git fails.
 func Branch(dir string) string {
-	out, err := run(dir, "rev-parse", "--abbrev-ref", "HEAD")
-	if err != nil || out == "HEAD" {
+	// symbolic-ref works before the first commit and exits 1 on a detached HEAD.
+	out, err := run(dir, "symbolic-ref", "--short", "-q", "HEAD")
+	if err != nil {
 		return ""
 	}
 	return out

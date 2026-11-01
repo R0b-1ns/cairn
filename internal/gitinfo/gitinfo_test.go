@@ -101,3 +101,15 @@ func TestParseAuthor(t *testing.T) {
 		}
 	}
 }
+
+func TestBranchUnborn(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	isolate(t)
+	dir := t.TempDir()
+	git(t, dir, "init", "-b", "main")
+	if got := Branch(dir); got != "main" {
+		t.Errorf("unborn repo: got %q, want main", got)
+	}
+}
