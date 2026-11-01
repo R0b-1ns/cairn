@@ -17,6 +17,7 @@ import (
 
 	"github.com/R0b-1ns/cairn/internal/ids"
 	"github.com/R0b-1ns/cairn/internal/model"
+	"github.com/R0b-1ns/cairn/internal/tasks"
 	"github.com/R0b-1ns/cairn/internal/validate"
 )
 
@@ -48,7 +49,7 @@ type option struct {
 
 // filters are the values offered by the sidebar selects.
 type filters struct {
-	Statuses, Tasks, Repos, Agents []option
+	Statuses, Tasks, Repos, Agents, Branches, Authors []option
 }
 
 // page is what the layout needs, plus the content of one page.
@@ -71,6 +72,10 @@ type noteRow struct {
 	ID, Task, TaskBase, Title, Repo, Agent, At, Text string
 	Status                                           model.Status
 	OpenPoints                                       int
+	// Branch and Author are the note's own; More* are the other values of its addenda.
+	// Branches and Authors list everything the filters match, one value per line.
+	Branch, Author, Branches, Authors string
+	MoreBranches, MoreAuthors         []string
 }
 
 type entriesContent struct {
@@ -83,11 +88,14 @@ type entriesContent struct {
 
 type entryRow struct {
 	ID, Task, TaskBase, Repo, At, Text, By, Agent, NoteID, State, Search string
+	Branches, Authors                                                    string // of the holder, for the filters
 	Closed                                                               bool
 }
 
 type noteContent struct {
 	ID, Agent, Model, Repo, Task, At, Title string
+	Author, Branch                          string
+	Refs                                    []refView
 	Impacts, Commits                        []string
 	Status, Written                         model.Status
 	ShowWritten                             bool
@@ -109,8 +117,16 @@ type entryView struct {
 	CloserID            string
 }
 
+// refView is a ref shown on a card; only an http or https ref is a link.
+type refView struct {
+	URL  string
+	Link bool
+}
+
 type addendumView struct {
 	ID, Agent, Model, At string
+	Author, Branch       string
+	Refs                 []refView
 	Status               model.Status
 	Entries              []entryView
 	Resolves, Supersedes []string
@@ -197,7 +213,17 @@ func render(s *Site) (map[string][]byte, error) {
 	var nf filterSet
 	for _, nv := range s.Notes {
 		nf.add(nv.Header.Task, nv.Header.Repo, nv.Header.Agent)
+		own := origin{nv.Note.Branch, nv.Note.AuthorName, nv.Note.AuthorEmail}
+		all := []origin{own}
+		for _, a := range nv.Addenda {
+			all = append(all, origin{a.Branch, a.AuthorName, a.AuthorEmail})
+		}
+		nf.addOrigins(all...)
+		branches, authors := matchValues(all...)
+		moreB, moreA := others(own.branch, branchesOf(all[1:])), others(own.display(), displaysOf(all[1:]))
 		rows = append(rows, noteRow{
+			Branch: own.branch, Author: own.display(), Branches: branches, Authors: authors,
+			MoreBranches: moreB, MoreAuthors: moreA,
 			ID: nv.Header.ID, Task: nv.Header.Task, TaskBase: taskBase(s.Project, nv.Header.Task),
 			Title: nv.Header.Title, Repo: nv.Header.Repo,
 			Agent: nv.Header.Agent, At: nv.Header.At, Status: nv.Header.Status, OpenPoints: nv.OpenPoints,
@@ -226,10 +252,15 @@ func render(s *Site) (map[string][]byte, error) {
 		var ef filterSet
 		for _, e := range s.EntriesOf(v.typ) {
 			ef.add(e.Task, e.Repo, e.Agent)
+			holder := origin{e.Branch, e.AuthorName, e.AuthorEmail}
+			ef.addOrigins(holder)
+			branches, authors := matchValues(holder)
 			c.Rows = append(c.Rows, entryRow{
 				ID: e.ID, Task: e.Task, TaskBase: taskBase(s.Project, e.Task), Repo: e.Repo, At: e.At, Text: e.Text, By: e.By, Agent: e.Agent,
 				NoteID: e.NoteID, Closed: e.Closed, State: stateLabel(e.Type, e.Closed),
-				Search: strings.ToLower(strings.Join([]string{e.ID, e.Text, e.Task, e.Repo, e.Agent, e.NoteID}, " ")),
+				Branches: branches, Authors: authors,
+				Search: strings.ToLower(strings.Join([]string{e.ID, e.Text, e.Task, e.Repo, e.Agent, e.NoteID,
+					e.Branch, e.AuthorName, e.AuthorEmail}, " ")),
 			})
 		}
 		c.AllClosed = len(c.Rows) > 0
@@ -254,7 +285,7 @@ func render(s *Site) (map[string][]byte, error) {
 	for _, nv := range s.Notes {
 		p := base(nv.Header.Title, "note")
 		p.Root = "../"
-		p.Content = buildNote(nv, owner)
+		p.Content = buildNote(nv, owner, s.Project)
 		id := nv.Header.ID
 		if err := renderPage(files, "notes/"+id+".html", "note.html", p); err != nil {
 			return nil, err
@@ -299,19 +330,95 @@ func buildData(s *Site) ([]byte, error) {
 	return []byte("window.CAIRN = " + string(b) + ";\n"), nil
 }
 
-// filterSet gathers the task, repo and agent values of the rows of one view.
-type filterSet struct{ tasks, repos, agents map[string]bool }
+// origin is who wrote a note or addendum, and on which branch.
+type origin struct{ branch, name, email string }
+
+// display is the name, or the email when there is no name.
+func (o origin) display() string {
+	if o.name != "" {
+		return o.name
+	}
+	return o.email
+}
+
+// matchValues are the values a branch and an author filter match against, one per line:
+// the branches, and the names and emails (as `cairn list --author` matches them).
+func matchValues(list ...origin) (branches, authors string) {
+	var b, a []string
+	for _, o := range list {
+		b = append(b, o.branch)
+		a = append(a, o.name, o.email)
+	}
+	return strings.Join(distinct(b), "\n"), strings.Join(distinct(a), "\n")
+}
+
+func branchesOf(list []origin) []string {
+	var out []string
+	for _, o := range list {
+		out = append(out, o.branch)
+	}
+	return out
+}
+
+func displaysOf(list []origin) []string {
+	var out []string
+	for _, o := range list {
+		out = append(out, o.display())
+	}
+	return out
+}
+
+// distinct drops empty values and repeats, keeping the first-seen order.
+func distinct(l []string) []string {
+	seen := map[string]bool{}
+	out := []string{}
+	for _, v := range l {
+		if v != "" && !seen[v] {
+			seen[v] = true
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// others are the distinct values of l that differ from own.
+func others(own string, l []string) []string {
+	out := []string{}
+	for _, v := range distinct(l) {
+		if v != own {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// filterSet gathers the values of the rows of one view.
+type filterSet struct{ tasks, repos, agents, branches, authors map[string]bool }
+
+// addOrigins records the branch and author of a row; empty values are not offered.
+func (f *filterSet) addOrigins(list ...origin) {
+	for _, o := range list {
+		if o.branch != "" {
+			f.branches[o.branch] = true
+		}
+		if d := o.display(); d != "" {
+			f.authors[d] = true
+		}
+	}
+}
 
 func (f *filterSet) add(task, repo, agent string) {
 	if f.tasks == nil {
 		f.tasks, f.repos, f.agents = map[string]bool{}, map[string]bool{}, map[string]bool{}
+		f.branches, f.authors = map[string]bool{}, map[string]bool{}
 	}
 	f.tasks[task], f.repos[repo], f.agents[agent] = true, true, true
 }
 
 // build turns the values into select options; status is offered on the Notes view only.
 func (f *filterSet) build(p model.Project, status bool) filters {
-	out := filters{Tasks: taskOptions(p, f.tasks), Repos: plainOptions(f.repos), Agents: plainOptions(f.agents)}
+	out := filters{Tasks: taskOptions(p, f.tasks), Repos: plainOptions(f.repos), Agents: plainOptions(f.agents),
+		Branches: plainOptions(f.branches), Authors: plainOptions(f.authors)}
 	if status {
 		out.Statuses = []option{
 			{Value: string(model.StatusDone), Label: "done"}, {Value: string(model.StatusInProgress), Label: "in_progress"},
@@ -387,12 +494,15 @@ func taskBase(p model.Project, task string) string {
 }
 
 func noteSearchText(nv NoteView) string {
-	parts := []string{nv.Header.ID, nv.Header.Title, nv.Header.Task, nv.Header.Repo, nv.Header.Agent}
+	n := nv.Note
+	parts := []string{nv.Header.ID, nv.Header.Title, nv.Header.Task, nv.Header.Repo, nv.Header.Agent,
+		n.Branch, n.AuthorName, n.AuthorEmail, n.Ref}
+	parts = append(parts, nv.TaskRefs...)
 	for _, e := range nv.Note.Entries {
 		parts = append(parts, e.Text)
 	}
 	for _, a := range nv.Addenda {
-		parts = append(parts, a.Agent)
+		parts = append(parts, a.Agent, a.Branch, a.AuthorName, a.AuthorEmail, a.Ref)
 		for _, e := range a.Entries {
 			parts = append(parts, e.Text)
 		}
@@ -400,13 +510,42 @@ func noteSearchText(nv NoteView) string {
 	return strings.ToLower(strings.Join(parts, " "))
 }
 
-func buildNote(nv NoteView, owner map[string]string) noteContent {
+// refViews turns refs into card values, dropping empty ones and repeats.
+func refViews(refs ...string) []refView {
+	var out []refView
+	for _, r := range distinct(refs) {
+		l := strings.ToLower(r)
+		out = append(out, refView{URL: r, Link: strings.HasPrefix(l, "http://") || strings.HasPrefix(l, "https://")})
+	}
+	return out
+}
+
+// authorLine is "Name <email>", or whichever of the two is set.
+func authorLine(name, email string) string {
+	switch {
+	case name != "" && email != "":
+		return name + " <" + email + ">"
+	case name != "":
+		return name
+	default:
+		return email
+	}
+}
+
+func buildNote(nv NoteView, owner map[string]string, proj model.Project) noteContent {
 	n := nv.Note
 	c := noteContent{
 		ID: nv.Header.ID, Agent: n.Agent, Model: n.Model, Repo: n.Repo, Task: n.Task, At: n.At, Title: n.Title,
 		Impacts: n.Impacts, Commits: n.Commits, Status: nv.Header.Status, Written: nv.Written,
 		ShowWritten: nv.Written != "" && nv.Written != nv.Header.Status,
+		Author:      authorLine(n.AuthorName, n.AuthorEmail), Branch: n.Branch,
 	}
+	refs := append([]string{n.Ref}, nv.TaskRefs...)
+	if len(distinct(refs)) == 0 && n.Task != "" {
+		// no ref stored for the task: offer the one the project's URL template builds
+		refs = append(refs, tasks.URL(proj.TaskURL, n.Task))
+	}
+	c.Refs = refViews(refs...)
 	none := map[model.EntryType]bool{}
 	for _, t := range n.None {
 		none[t] = true
@@ -433,6 +572,7 @@ func buildNote(nv NoteView, owner map[string]string) noteContent {
 	}
 	for _, a := range nv.Addenda {
 		av := addendumView{ID: a.ID, Agent: a.Agent, Model: a.Model, At: a.At, Status: a.Status,
+			Author: authorLine(a.AuthorName, a.AuthorEmail), Branch: a.Branch, Refs: refViews(a.Ref),
 			Resolves: a.Resolves, Supersedes: a.Supersedes}
 		for _, e := range a.Entries {
 			av.Entries = append(av.Entries, view(e))

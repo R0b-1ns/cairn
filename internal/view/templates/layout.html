@@ -56,6 +56,20 @@
 <option value="{{.Value}}">{{.Label}}</option>
 {{- end}}
 </select>
+<label for="f-branch">Branch</label>
+<select id="f-branch" name="branch">
+<option value="*">Any</option>
+{{- range .Filters.Branches}}
+<option value="{{.Value}}">{{.Label}}</option>
+{{- end}}
+</select>
+<label for="f-author">Author</label>
+<select id="f-author" name="author">
+<option value="*">Any</option>
+{{- range .Filters.Authors}}
+<option value="{{.Value}}">{{.Label}}</option>
+{{- end}}
+</select>
 <label for="f-from">From</label>
 <input type="date" id="f-from" name="from">
 <label for="f-to">To</label>

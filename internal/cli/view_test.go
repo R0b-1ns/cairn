@@ -293,6 +293,7 @@ func TestViewSanitizesSiteText(t *testing.T) {
 		// The Markdown renderer prints "none" as stored, so only a final clean removes these.
 		None:    []model.EntryType{model.TypeChange, model.TypeOpen, model.TypeNote, model.TypeHelper, "helper\x1b[1m\u202e"},
 		Commits: []string{"abc1234\u202e"},
+		Branch:  "fe\x1b[31mat\u202e", AuthorName: "Ad\x1b[1ma", Ref: "https://x.example/\u202e",
 	})
 	if err != nil {
 		t.Fatalf("insert raw note: %v", err)
@@ -433,5 +434,48 @@ func TestMarkdownSanitizesFieldByField(t *testing.T) {
 	}
 	if !strings.HasSuffix(export, string(md)) {
 		t.Errorf("view .md is not the note part of export:\n--- md\n%s\n--- export\n%s", md, export)
+	}
+}
+
+// The site carries who wrote each note and on which branch, and the per-note
+// Markdown comes from the export renderer, so it has the origin line and the ref.
+func TestViewShowsBranchAuthorAndRef(t *testing.T) {
+	e := newAddEnv(t)
+	id, _ := seed(t, e, "2026-10-30T10:00:00Z", noteArgs("Wire ingest", "TP-03", "server", "done",
+		append([]string{"--change", "Started ingest", "--author", "Ada <ada@example.com>", "--branch", "feat/ingest",
+			"--ref", "https://tracker.example/TP-03"}, noneBut("change")...)...)...)
+	seed(t, e, "2026-10-31T10:00:00Z", noteArgs("Plain", "TP-04", "client", "done",
+		append([]string{"--change", "x", "--author", "Bob <bob@example.com>", "--branch", "main"}, noneBut("change")...)...)...)
+	noBrowser(t)
+	if r := e.run("view"); r.code != ExitOK {
+		t.Fatalf("view: %+v", r)
+	}
+	dir := filepath.Join(e.root, ".cairn", "view")
+	read := func(f string) string {
+		b, err := os.ReadFile(filepath.Join(dir, f))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	index := read("index.html")
+	for _, want := range []string{`data-branch="feat/ingest"`, `data-author="Ada"`, `<option value="feat/ingest">feat/ingest</option>`,
+		`<option value="Bob">Bob</option>`, `data-sort="branch"`} {
+		if !strings.Contains(index, want) {
+			t.Errorf("index.html lacks %q", want)
+		}
+	}
+	page := read("notes/" + id + ".html")
+	if !strings.Contains(page, `<a href="https://tracker.example/TP-03" rel="noopener noreferrer">`) || !strings.Contains(page, "Ada &lt;ada@example.com&gt;") {
+		t.Errorf("note page lacks the ref link or author")
+	}
+	md := read("notes/" + id + ".md")
+	for _, want := range []string{"by Ada ada@example.com on feat/ingest", "ref: https://tracker.example/TP-03"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("note markdown lacks %q:\n%s", want, md)
+		}
+	}
+	if !strings.Contains(read("data.js"), "ref: https://tracker.example/TP-03") {
+		t.Error("data.js lacks the ref in the note markdown")
 	}
 }

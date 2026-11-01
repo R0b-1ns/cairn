@@ -5,9 +5,11 @@
   "use strict";
 
   // matches reports whether a row passes the filters.
-  // row: {status, task, taskBase, repo, agent, at, text, closed};
-  // f: {text, status, task, taskIsBase, repo, agent, from, to, showClosed}.
-  // task, repo and agent use "*" for any (a task may legitimately be "").
+  // row: {status, task, taskBase, repo, agent, branches, authors, at, text, closed}, where branches and
+  // authors are arrays: for a note, those of the note and its addenda; for an entry, its holder's.
+  // f: {text, status, task, taskIsBase, repo, agent, branch, author, from, to, showClosed}.
+  // task, repo, agent, branch and author use "*" for any (a task may legitimately be "").
+  // An author is matched against names and emails, as `cairn list --author` does.
   // A base task (taskIsBase) selects itself and its extensions; any other task selects exactly itself.
   function matches(row, f) {
     if (row.closed && !f.showClosed) return false;
@@ -15,6 +17,8 @@
     if (f.task !== "*" && (f.taskIsBase ? row.taskBase !== f.task : row.task !== f.task)) return false;
     if (f.repo !== "*" && row.repo !== f.repo) return false;
     if (f.agent !== "*" && row.agent !== f.agent) return false;
+    if (f.branch && f.branch !== "*" && (row.branches || []).indexOf(f.branch) < 0) return false;
+    if (f.author && f.author !== "*" && (row.authors || []).indexOf(f.author) < 0) return false;
     var day = (row.at || "").slice(0, 10);
     if (f.from && day < f.from) return false;
     if (f.to && day > f.to) return false;
@@ -93,15 +97,22 @@
       task: value("f-task", "*"),
       repo: value("f-repo", "*"),
       agent: value("f-agent", "*"),
+      branch: value("f-branch", "*"),
+      author: value("f-author", "*"),
       from: value("f-from", ""),
       to: value("f-to", ""),
       showClosed: closed ? closed.checked : true
     };
   }
 
+  function lines(s) {
+    return s ? s.split("\n") : [];
+  }
+
   function rowData(tr) {
     var d = tr.dataset;
     return {
+      branches: lines(d.branches), authors: lines(d.authors),
       status: d.status || "", task: d.task || "", taskBase: d.taskBase || "", repo: d.repo || "", agent: d.agent || "",
       at: d.at || "", text: d.text || "", closed: d.closed === "true"
     };

@@ -11,6 +11,8 @@ import (
 type EntryRow struct {
 	store.EntryInfo
 	Agent string // agent that wrote the entry (the addendum's agent for addendum entries)
+	// Branch and the author are those of the note or addendum that holds the entry.
+	Branch, AuthorName, AuthorEmail string
 }
 
 // NoteView is one note with everything the site shows about it.
@@ -22,6 +24,9 @@ type NoteView struct {
 	OpenPoints int                        // open entries of the note and its addenda not yet resolved
 	States     map[string]store.EntryInfo // entry ID -> state, for every entry of the note and its addenda
 	Markdown   string                     // filled by the caller (cli), notes part only
+	// TaskRefs are the refs stored anywhere for the note's task (base), newest first.
+	// The note's own branch, author and ref are in Note and Header; the addenda's in Addenda.
+	TaskRefs []string
 }
 
 // Site is the data behind the whole website.
@@ -52,6 +57,9 @@ func Collect(st *store.Store, proj model.Project, generated string) (*Site, erro
 		byNote[e.NoteID][e.ID] = e
 	}
 	agents := map[string]string{} // addendum ID -> agent
+	type origin struct{ branch, name, email string }
+	holders := map[string]origin{}    // note or addendum ID -> who wrote it, on which branch
+	taskRefs := map[string][]string{} // task base -> refs, read once per base
 	// headers are oldest first; build newest first.
 	for i := len(headers) - 1; i >= 0; i-- {
 		h := headers[i]
@@ -63,8 +71,20 @@ func Collect(st *store.Store, proj model.Project, generated string) (*Site, erro
 		if err != nil {
 			return nil, err
 		}
+		holders[h.ID] = origin{n.Branch, n.AuthorName, n.AuthorEmail}
 		for _, a := range add {
 			agents[a.ID] = a.Agent
+			holders[a.ID] = origin{a.Branch, a.AuthorName, a.AuthorEmail}
+		}
+		var refs []string
+		if base := taskBase(proj, n.Task); base != "" {
+			var ok bool
+			if refs, ok = taskRefs[base]; !ok {
+				if refs, err = st.TaskRefs(base); err != nil {
+					return nil, err
+				}
+				taskRefs[base] = refs
+			}
 		}
 		states := byNote[h.ID]
 		if states == nil {
@@ -77,7 +97,7 @@ func Collect(st *store.Store, proj model.Project, generated string) (*Site, erro
 			}
 		}
 		site.Notes = append(site.Notes, NoteView{
-			Header: h, Written: n.Status, Note: n, Addenda: add, OpenPoints: open, States: states,
+			Header: h, Written: n.Status, Note: n, Addenda: add, OpenPoints: open, States: states, TaskRefs: refs,
 		})
 	}
 	noteAgent := map[string]string{}
@@ -85,11 +105,13 @@ func Collect(st *store.Store, proj model.Project, generated string) (*Site, erro
 		noteAgent[h.ID] = h.Agent
 	}
 	for _, e := range infos {
-		agent := noteAgent[e.NoteID]
+		agent, holder := noteAgent[e.NoteID], e.NoteID
 		if e.AddendumID != "" {
-			agent = agents[e.AddendumID]
+			agent, holder = agents[e.AddendumID], e.AddendumID
 		}
-		site.Entries = append(site.Entries, EntryRow{EntryInfo: e, Agent: agent})
+		o := holders[holder]
+		site.Entries = append(site.Entries, EntryRow{EntryInfo: e, Agent: agent,
+			Branch: o.branch, AuthorName: o.name, AuthorEmail: o.email})
 	}
 	return site, nil
 }

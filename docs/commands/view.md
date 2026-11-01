@@ -1,6 +1,6 @@
 # cairn view
 
-Writes a read-only website of the project's notes, to browse and filter them in a browser. It never changes the database.
+Writes a read-only website of the project's notes, to browse and filter them in a browser. It never changes the database, apart from the one-time schema 3 to 4 migration that every command performs when it opens an older database (see `storage.md`).
 
 ## Usage
 
@@ -54,9 +54,13 @@ The site is in English. It has four views, each a page with its own filters:
 - **Open points**: every open-point entry.
 - **Helpers**: every helper entry.
 
-Every view filters by task, repo, agent, a date range and text; Notes also filter by status. Each view offers only the values of the rows it lists. The task filter follows the same rule as `cairn list --task`: a base task such as `TP-03`, shown as "TP-03 (incl. extensions)" when the view has some, selects the base and its extensions; an extension such as `TP-03.1` selects only itself. Decisions and open points that are closed are hidden until "Show closed" is ticked; when all of them are closed, the page says so.
+The Notes table has Branch and Author columns next to Agent. Each cell shows the note's own branch or author; when the note's addenda were written on other branches or by other authors, those follow after a `+`. A column with no value shows `-`. Click a column header to sort by it: the first click sorts ascending, the second descending, and an arrow in the header shows the order. The Branch and Author columns sort like the others.
 
-Each note has a Markdown download. Each view has a "Download this view" button that exports only what is currently filtered. A downloaded list of entries starts with `# <project> — <view>` and says `No matching <entries>.` when nothing is shown. In a downloaded list of decisions or open points, a closed entry ends with `(superseded by <id>)` or `(resolved by <id>)`, as in `cairn list`.
+Every view filters by task, repo, agent, branch, author, a date range and text; Notes also filter by status. The branch and author filters follow `cairn list --branch` and `--author`: on the Notes view a note matches when the note or any of its addenda has that branch, or an author with that name or email; on the Decisions, Open points and Helpers views an entry matches with the branch and author of the note or addendum that holds it. The author filter lists each author by name, or by email when there is no name. These two filters offer only values that exist, so a project whose notes have no branch or author offers none. The text filter also searches author, branch and refs. Each view offers only the values of the rows it lists. The task filter follows the same rule as `cairn list --task`: a base task such as `TP-03`, shown as "TP-03 (incl. extensions)" when the view has some, selects the base and its extensions; an extension such as `TP-03.1` selects only itself. Decisions and open points that are closed are hidden until "Show closed" is ticked; when all of them are closed, the page says so.
+
+Each note has its own page with a card: agent, model, repo, impacts, author (name and email), branch, refs, task, date, status and commits. A ref is a link only when it starts with `http://` or `https://`, and opens with `rel="noopener noreferrer"`. The refs are those stored for the note's task (on any of its notes or addenda); when there is none and the project has a task URL, the card shows the link built from it. Each addendum shows its own author, branch and ref.
+
+Each note has a Markdown download, the same text as `cairn export --format md`, so it includes the origin line and refs. Each view has a "Download this view" button that exports only what is currently filtered, including by branch and author. A downloaded list of entries starts with `# <project> — <view>` and says `No matching <entries>.` when nothing is shown. In a downloaded list of decisions or open points, a closed entry ends with `(superseded by <id>)` or `(resolved by <id>)`, as in `cairn list`.
 
 The pages work when opened straight from disk (`file://`) with no server, so `--serve` is optional.
 
@@ -93,4 +97,4 @@ Writes the site and prints `{"dir": "...", "index": "...", "url": ""}`. Exit cod
 - The folder is generated: it holds a `.gitignore` containing `*`, so it is never committed. It holds no source data and is safe to delete. See `storage.md`.
 - The site is read-only and a copy: the database stays the source of truth. Run `cairn view` again to refresh it.
 - Note text is escaped in the HTML and never inserted as HTML in the browser. See `security.md`.
-- The command never writes to the database.
+- The command never writes to the database. Opening a database still at schema 3 migrates it to schema 4 first, after a backup copy, as every command does.

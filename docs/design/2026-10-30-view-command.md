@@ -31,7 +31,7 @@ Why now: notes pile up, and reading them through `list`, `show` and `export` is 
 
 ## Constraints
 
-- **Existing databases stay valid.** The command is strictly read-only on the database. It adds no table, column, index, trigger or `PRAGMA user_version` change, because every open verifies the schema exactly (see `docs/storage.md`, "Verification on every open"). No store change is needed: the command uses the data already readable through the store.
+- **Existing databases stay valid.** The command never changes the database, except the one-time schema 3 to 4 migration that any command performs when it opens an older database (see `docs/storage.md`). It adds no table, column, index, trigger or `PRAGMA user_version` change of its own, because every open verifies the schema exactly (see `docs/storage.md`, "Verification on every open"). No store change is needed: the command uses the data already readable through the store.
 - Written in Go, with no new dependency. Page templates are embedded in the binary.
 - Filtering runs in plain JavaScript in the page. Data is embedded in the page or in a local file next to it, so the site also works opened straight from disk.
 - The command follows the existing conventions: project lookup, `--project`, `--json` where relevant, exit codes, `docs/commands/<name>.md`, and the docs tests in `internal/cli/docs_test.go`.
