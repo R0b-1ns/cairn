@@ -176,12 +176,17 @@ func showNote(c *Ctx, s *session, id string, asJSON bool) error {
 	if err != nil {
 		return err
 	}
+	refs, err := noteRefs(s, n, add)
+	if err != nil {
+		return err
+	}
 	if asJSON {
 		printJSON(c, struct {
 			model.Note
 			CurrentStatus model.Status     `json:"current_status"`
 			Addenda       []model.Addendum `json:"addenda"`
-		}{n, cur, nonNil(add)})
+			Refs          []string         `json:"refs,omitempty"`
+		}{n, cur, nonNil(add), refs})
 		return nil
 	}
 	fmt.Fprintf(c.Stdout, "%s  %s\n", n.ID, sanitize(n.Title))
@@ -197,10 +202,6 @@ func showNote(c *Ctx, s *session, id string, asJSON bool) error {
 	fmt.Fprintln(c.Stdout, status)
 	if o := originLine(n.AuthorName, n.AuthorEmail, n.Branch); o != "" {
 		fmt.Fprintln(c.Stdout, o)
-	}
-	refs, err := noteRefs(s, n, add)
-	if err != nil {
-		return err
 	}
 	for _, r := range refs {
 		fmt.Fprintf(c.Stdout, "ref: %s\n", sanitize(r))

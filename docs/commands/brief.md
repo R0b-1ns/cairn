@@ -47,7 +47,7 @@ The `refs:` line lists every `ref` stored on the notes and addenda of the task a
 
 Sections are in this order: `notes` (oldest first), `changes` (oldest first), `decisions in force`, `open points`. An empty section prints `  none`. A change or open point taken from an addendum shows `(n-4k7q2m via a-9x3b2c)`. A task without notes prints `no notes for task TP-09`.
 
-`--json` prints one object with the keys `task`, `notes`, `changes`, `decisions`, `open`, and the totals `notes_total`, `changes_total`, `decisions_total`, `open_total`. Each list is capped by `--max`; the totals count everything that matched, so a consumer can tell when a list was cut.
+`--json` prints one object with the keys `task`, `notes`, `changes`, `decisions`, `open`, and the totals `notes_total`, `changes_total`, `decisions_total`, `open_total`, plus `refs` when there is at least one: an array of the same links as the `refs:` line (every stored `ref` of the task, newest first, each once, or the computed link when none is stored). `refs` is omitted when empty. Each list is capped by `--max`; the totals count everything that matched, so a consumer can tell when a list was cut.
 
 - `notes`: objects with the keys `id`, `task`, `repo`, `agent`, `model`, `at`, `title`, `status` (the current status), and, when not empty, `branch`, `author_name`, `author_email`, `ref`.
 - `changes`, `decisions`, `open`: entry objects with `id`, `type`, `text`, `by`, `note_id`, `addendum_id`, `task`, `repo`, `at`, `closed`, `closed_by`, `closed_at`.

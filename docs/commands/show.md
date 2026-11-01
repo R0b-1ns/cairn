@@ -56,7 +56,7 @@ e-7h2m9q  decision  in note n-4k7q2m
 e-7h2m9q  decision [user] Index buckets are hourly, to match the sensor rate.
 ```
 
-`--json` for a note prints the note's fields (`id`, `agent`, `repo`, `at`, `task`, `model`, `title`, `status`, `entries`, `none`, `impacts`, `commits`, `resolves`, `supersedes`, and, when set, `author_name`, `author_email`, `branch`, `ref`) plus `current_status` and `addenda` (the addenda, as objects with `id`, `note_id`, `agent`, `model`, `at`, `status`, `entries`, `resolves`, `supersedes`, and, when set, `author_name`, `author_email`, `branch`, `ref`). For an addendum it prints the addendum object. For an entry it prints the entry object with `id`, `type`, `text`, `by`, `note_id`, `addendum_id`, `task`, `repo`, `at`, `closed`, `closed_by`, `closed_at`.
+`--json` for a note prints the note's fields (`id`, `agent`, `repo`, `at`, `task`, `model`, `title`, `status`, `entries`, `none`, `impacts`, `commits`, `resolves`, `supersedes`, and, when set, `author_name`, `author_email`, `branch`, `ref`) plus `current_status`, `refs` when there is at least one (an array of the links of the `ref:` lines, in the same order, computed link included; omitted when empty) and `addenda` (the addenda, as objects with `id`, `note_id`, `agent`, `model`, `at`, `status`, `entries`, `resolves`, `supersedes`, and, when set, `author_name`, `author_email`, `branch`, `ref`). For an addendum it prints the addendum object. For an entry it prints the entry object with `id`, `type`, `text`, `by`, `note_id`, `addendum_id`, `task`, `repo`, `at`, `closed`, `closed_by`, `closed_at`.
 
 ## Exit codes
 

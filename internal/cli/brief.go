@@ -91,12 +91,20 @@ func defineBrief(fs *flag.FlagSet) Handler {
 				return fail(c, ExitRuntime, "%v", err)
 			}
 		}
+		refs, err := briefRefs(s, args[0], flt)
+		if err != nil {
+			return fail(c, ExitRuntime, "%v", err)
+		}
 		if f.json {
-			printJSON(c, map[string]any{"task": args[0],
+			out := map[string]any{"task": args[0],
 				"notes": nonNil(capped(headers, f.max)), "notes_total": len(headers),
 				"changes": nonNil(capped(changes, f.max)), "changes_total": len(changes),
 				"decisions": nonNil(capped(decisions, f.max)), "decisions_total": len(decisions),
-				"open": nonNil(capped(opens, f.max)), "open_total": len(opens)})
+				"open": nonNil(capped(opens, f.max)), "open_total": len(opens)}
+			if len(refs) > 0 {
+				out["refs"] = refs // omitted when empty, so older output is unchanged
+			}
+			printJSON(c, out)
 			return ExitOK
 		}
 		if len(headers) == 0 {
@@ -104,10 +112,6 @@ func defineBrief(fs *flag.FlagSet) Handler {
 			return ExitOK
 		}
 		fmt.Fprintf(c.Stdout, "%s: %d note(s)\n", args[0], len(headers))
-		refs, err := briefRefs(s, args[0], flt)
-		if err != nil {
-			return fail(c, ExitRuntime, "%v", err)
-		}
 		if len(refs) > 0 {
 			var clean []string
 			for _, r := range refs {

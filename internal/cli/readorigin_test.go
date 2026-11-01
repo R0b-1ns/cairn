@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -223,5 +225,52 @@ func TestImportRejectsNewTask(t *testing.T) {
 	r := b.runIn(b.root, bad, "import", "-")
 	if r.code != ExitValidation || !strings.Contains(r.err, "new_task") {
 		t.Fatalf("%+v", r)
+	}
+}
+
+func jsonRefs(t *testing.T, out string) ([]string, bool) {
+	t.Helper()
+	var v struct {
+		Refs *[]string `json:"refs"`
+	}
+	if err := json.Unmarshal([]byte(out), &v); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if v.Refs == nil {
+		return nil, false
+	}
+	return *v.Refs, true
+}
+
+func TestJSONRefs(t *testing.T) {
+	e := newEnv(t)
+	e.initProject("--tasks", "jira", "--task-url", "https://x.atlassian.net/browse/{task}")
+	setClock(t, "2026-10-30T10:00:00Z")
+	a := originNote(t, e, "PROJ-12.1")
+	computed := []string{"https://x.atlassian.net/browse/PROJ-12"}
+	if got, _ := jsonRefs(t, e.mustRun("brief", "PROJ-12", "--json").out); !reflect.DeepEqual(got, computed) {
+		t.Errorf("brief computed: %v", got)
+	}
+	if got, _ := jsonRefs(t, e.mustRun("show", a, "--json").out); !reflect.DeepEqual(got, computed) {
+		t.Errorf("show computed: %v", got)
+	}
+	setClock(t, "2026-10-31T10:00:00Z")
+	b := originNote(t, e, "PROJ-12", "--ref", issue1)
+	setClock(t, "2026-11-01T10:00:00Z")
+	amendNote(t, e, a, "--ref", issue2)
+	if got, _ := jsonRefs(t, e.mustRun("brief", "PROJ-12", "--json").out); !reflect.DeepEqual(got, []string{issue2, issue1}) {
+		t.Errorf("brief stored: %v", got)
+	}
+	if got, _ := jsonRefs(t, e.mustRun("show", b, "--json").out); !reflect.DeepEqual(got, []string{issue1, issue2}) {
+		t.Errorf("show stored (own first): %v", got)
+	}
+	e2 := newEnv(t)
+	e2.initProject()
+	c := originNote(t, e2, "TP-03")
+	if _, ok := jsonRefs(t, e2.mustRun("brief", "TP-03", "--json").out); ok {
+		t.Error("brief: refs must be omitted when empty")
+	}
+	if _, ok := jsonRefs(t, e2.mustRun("show", c, "--json").out); ok {
+		t.Error("show: refs must be omitted when empty")
 	}
 }

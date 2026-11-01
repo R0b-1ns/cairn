@@ -44,7 +44,7 @@ cairn init --name tidepool --repos server,client --tasks jira --task-url "https:
 | `cairn show <id>` | The full note, addendum or entry, nothing clipped. |
 | `cairn search <terms>` | Full-text search; all terms must match. Put `--` before a term that starts with `-`. |
 | `cairn check` | `--done T-1,T-2` or `--done-file FILE` lists done tasks that have no note or whose latest note is not done; also open points older than `--older-than` days (default 14). Exit code 5 when it finds something. |
-| `cairn context` | Project name, repos, task pattern and context. |
+| `cairn context` | Project name, repos, task pattern, task mode (with its prefix in `auto` mode) and ticket URL when set, and context. |
 | `cairn projects` | Every project registered on this machine. |
 | `cairn view` | Write a read-only website of the notes, for people to browse; agents use `list` and `show`. |
 

@@ -435,3 +435,21 @@ func TestInitTaskURLAlone(t *testing.T) {
 		t.Fatalf("stderr: %q", r.err)
 	}
 }
+
+func TestContextShowsTaskMode(t *testing.T) {
+	e := newEnv(t)
+	e.initProject("--tasks", "auto")
+	out := e.mustRun("context").out
+	if !strings.Contains(out, "task pattern: ^(?P<base>T-\\d{1,6})(?:\\.(?P<ext>\\d{1,3}))?$\ntask mode: auto (prefix T)\n") {
+		t.Errorf("auto:\n%s", out)
+	}
+	if strings.Contains(out, "task url:") {
+		t.Errorf("no url set:\n%s", out)
+	}
+	e2 := newEnv(t)
+	e2.initProject("--tasks", "jira", "--task-url", "https://x.example/browse/{task}")
+	out = e2.mustRun("context").out
+	if !strings.Contains(out, "\ntask mode: jira\ntask url: https://x.example/browse/{task}\n") {
+		t.Errorf("jira:\n%s", out)
+	}
+}

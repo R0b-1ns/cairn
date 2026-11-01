@@ -198,6 +198,18 @@ func defineContext(fs *flag.FlagSet) Handler {
 			fmt.Fprintf(c.Stdout, "default repo: %s\n", p.DefaultRepo)
 		}
 		fmt.Fprintf(c.Stdout, "task pattern: %s\n", p.TaskPattern)
+		// Projects made before task modes have no mode: print nothing more, so
+		// their output stays as it was.
+		if p.TaskMode != "" {
+			if p.TaskMode == tasks.Auto {
+				fmt.Fprintf(c.Stdout, "task mode: %s (prefix %s)\n", p.TaskMode, p.TaskPrefix)
+			} else {
+				fmt.Fprintf(c.Stdout, "task mode: %s\n", p.TaskMode)
+			}
+			if p.TaskURL != "" {
+				fmt.Fprintf(c.Stdout, "task url: %s\n", p.TaskURL)
+			}
+		}
 		if p.Context != "" {
 			fmt.Fprintf(c.Stdout, "\n%s\n", p.Context)
 		}

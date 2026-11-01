@@ -1,6 +1,6 @@
 # cairn context
 
-Prints the project's name, storage mode, repos, task pattern and context text.
+Prints the project's name, storage mode, repos, task pattern, task mode and context text.
 
 ## Usage
 
@@ -31,7 +31,17 @@ task pattern: ^(?P<base>[A-Z]{2,5}-\d{1,4})(?:\.(?P<ext>\d{1,3}))?$
 Tide data service. Sensor ingest, the tidal index and the browser client.
 ```
 
-The blank line and context text are printed only when a context is set. `mode` is `project` or `machine`.
+The blank line and context text are printed only when a context is set. `mode` is `project` or `machine`. `default repo:` is printed only when the project has a default repo.
+
+A project created with a task mode prints one more line after `task pattern:`, and a `task url:` line when it has a ticket URL. For `auto`, the line names the prefix; such a project expects `add --new-task` for new work:
+
+```
+task pattern: ^(?P<base>T-\d{1,6})(?:\.(?P<ext>\d{1,3}))?$
+task mode: auto (prefix T)
+task url: https://tracker.example.org/browse/{task}
+```
+
+Other modes print `task mode: jira`, `task mode: linear`, `task mode: github` or `task mode: custom`. A project created before schema version 4 has no task mode and prints neither line, so its output is unchanged.
 
 `--json` prints:
 
@@ -76,4 +86,5 @@ Exit code 4 when `/work` is not inside a project; the message says to run `cairn
 
 - Read `context` once per session to learn the allowed `--repo` values and the task ID format before writing a note.
 - The task pattern is the regular expression that every `--task` value must match.
+- `task mode: auto` means cairn numbers tasks: start new work with `add --new-task` and continue it with `--task T-N`.
 - Use `--project` or the `CAIRN_PROJECT` environment variable to address a registered project outside its folder.

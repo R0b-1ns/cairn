@@ -154,7 +154,7 @@ task pattern: ^(?P<base>[A-Z]{2,5}-\d{1,4})(?:\.(?P<ext>\d{1,3}))?$
 Tide data service.
 ```
 
-The blank line and context appear only when the project has a context.
+The blank line and context appear only when the project has a context. A `default repo: <repo>` line follows `repos:` when the project has one. A project with a task mode adds `task mode: <mode>` after `task pattern:` (`task mode: auto (prefix T)` in `auto` mode), then `task url: <template>` when it has a ticket URL; a project created before schema version 4 prints neither.
 
 ### export (markdown)
 
@@ -168,15 +168,15 @@ Every command that lists or shows data accepts `--json`, which prints indented J
 |---|---|
 | `add` | The stored note: `id`, `agent`, `repo`, `at`, `task`, `model`, `title`, `status`, `entries` (with IDs), and `none`, `impacts`, `commits`, `resolves`, `supersedes` when set. |
 | `amend` | The stored addendum: `id`, `note_id`, `agent`, `model`, `at`, `status` when set, `entries`, `resolves`, `supersedes`. |
-| `show <n-id>` | The note, plus `current_status` and `addenda` (an array, possibly empty). |
+| `show <n-id>` | The note, plus `current_status`, `addenda` (an array, possibly empty) and `refs` (the links of the `ref:` lines; omitted when empty). |
 | `show <a-id>` | The addendum. |
 | `show <e-id>` | One entry object (see below). |
 | `list` | An array of entry objects. |
 | `search` | An array of hits: `kind`, `id`, `note_id`, `addendum_id`, `type`, `snippet`. |
-| `brief` | An object: `task`, `notes` (headers), `changes`, `decisions`, `open`. Not capped by `--max`. |
+| `brief` | An object: `task`, `notes` (headers), `changes`, `decisions`, `open`, and `refs` (the links of the `refs:` line; omitted when empty). Not capped by `--max`. |
 | `recent` | An array: `subject`, `last_at`, `status`, `title`, `note_id`, `notes`. |
 | `check` | An object: `missing_notes`, `not_done`, `old_open`, `ok`. |
-| `context` | The project object: `name`, `mode`, `context`, `repos`, `task_pattern`. |
+| `context` | The project object: `name`, `mode`, `context`, `repos`, `default_repo`, `task_pattern`, and, when set, `task_mode`, `task_prefix`, `task_url`. |
 | `projects` | An array: `name`, `mode`, `path`, `notes` (`-1` when unreadable), `missing`. |
 
 An entry object always has every key: `id`, `type`, `text`, `by` (empty unless a decision), `note_id`, `addendum_id` (empty unless from an addendum), `task`, `repo`, `at`, `closed` (boolean), `closed_by`, `closed_at`.
