@@ -9,20 +9,13 @@
 
 ## Install
 
-Download the binary for your platform from the [latest release](https://github.com/R0b-1ns/cairn/releases/latest), check it against `SHA256SUMS`, and put it on your `PATH`:
+Run the install script. It downloads the binary of the [latest release](https://github.com/R0b-1ns/cairn/releases/latest) for your platform, checks it against `SHA256SUMS`, makes it executable, and installs it as `cairn` in `/usr/local/bin` (or `~/.local/bin` when that is not writable):
 
 ```sh
-os=$(uname -s | tr '[:upper:]' '[:lower:]')   # darwin or linux
-arch=$(uname -m); case "$arch" in x86_64) arch=amd64 ;; aarch64|arm64) arch=arm64 ;; esac
-base=https://github.com/R0b-1ns/cairn/releases/latest/download
-
-curl -fsSLO "$base/cairn-$os-$arch"
-curl -fsSLO "$base/SHA256SUMS"
-grep " cairn-$os-$arch\$" SHA256SUMS | shasum -a 256 -c - && \
-  chmod +x "cairn-$os-$arch" && \
-  sudo mv "cairn-$os-$arch" /usr/local/bin/cairn && \
-  cairn --version        # on Linux use: sha256sum -c -
+curl -fsSL https://raw.githubusercontent.com/R0b-1ns/cairn/main/scripts/install.sh | sh
 ```
+
+Set `CAIRN_VERSION=v1.0.1` to pin a release and `CAIRN_INSTALL_DIR=/some/dir` to choose the destination. To do it by hand, download `cairn-<os>-<arch>` and `SHA256SUMS` from the release page, check the hash with `shasum -a 256 -c` (`sha256sum -c` on Linux), then `chmod +x` it and move it onto your `PATH`.
 
 Supported platforms: macOS and Linux, on amd64 and arm64. With Go 1.27 or newer you can also build from source: `go install github.com/R0b-1ns/cairn/cmd/cairn@latest`.
 
