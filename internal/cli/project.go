@@ -28,8 +28,9 @@ func init() {
 func defineInit(fs *flag.FlagSet) Handler {
 	var p model.Project
 	var repos, path, taskMode string
-	var noInput bool
-	fs.StringVar(&p.Name, "name", "", "project name: lowercase letters, digits, - and _ (required)")
+	var noInput, local bool
+	var parent, repo string
+	fs.StringVar(&p.Name, "name", "", "project name: lowercase letters, digits, - and _ (required; with --project only with --local, default: the --repo value)")
 	fs.StringVar(&p.Mode, "mode", model.ModeProject, "storage mode: project (database in .cairn/) or machine (database in the data directory)")
 	fs.StringVar(&path, "path", "", "project root folder (default: current directory)")
 	fs.StringVar(&p.Context, "context", "", "a few lines describing the project")
@@ -39,12 +40,29 @@ func defineInit(fs *flag.FlagSet) Handler {
 	fs.StringVar(&taskMode, "tasks", "", "task numbering mode: "+strings.Join(tasks.Modes(), ", ")+" (see --task-pattern for the default when omitted)")
 	fs.StringVar(&p.TaskPrefix, "task-prefix", "", "1-5 capital letters for the auto mode (default: T)")
 	fs.StringVar(&p.TaskURL, "task-url", "", "link template containing {task}, for example https://example.com/browse/{task}")
+	fs.StringVar(&parent, "project", "", "join this registered project as a child instead of creating a new one (needs --repo); the child takes the parent's task settings")
+	fs.StringVar(&repo, "repo", "", "with --project: the repo name of this folder in the parent project")
+	fs.BoolVar(&local, "local", false, "with --project: give the child its own database instead of attaching it to the parent's")
 	fs.BoolVar(&noInput, "no-input", false, "do not ask questions even in a terminal")
 	return func(c *Ctx, args []string) int {
 		if len(args) != 0 {
 			return fail(c, ExitUsage, "init takes no arguments")
 		}
 		given := setFlags(fs)
+		if given["project"] || given["repo"] || given["local"] {
+			if !given["project"] {
+				return fail(c, ExitUsage, "--repo and --local only go with --project")
+			}
+			for _, f := range []string{"repos", "mode", "default-repo", "tasks", "task-pattern", "task-prefix", "task-url"} {
+				if given[f] {
+					return fail(c, ExitUsage, "--%s cannot be combined with --project: a child takes the parent's task settings and its own repo", f)
+				}
+			}
+			if given["name"] && !local {
+				return fail(c, ExitUsage, "--name with --project needs --local (an attached child is named after its repo)")
+			}
+			return initChild(c, parent, repo, p.Name, local, path, p.Context)
+		}
 		if c.Interactive && !noInput {
 			v := &initValues{P: &p, Repos: &repos, Path: &path, TaskMode: &taskMode}
 			if err := askInit(c, given, v); err != nil {

@@ -6,6 +6,7 @@ Creates a project: its database, and its entry in the machine registry. Only `in
 
 ```
 cairn init --name NAME --repos REPO[,REPO...] [--mode project|machine] [--path DIR] [--context TEXT] [--default-repo REPO] [--tasks auto|jira|linear|github|custom] [--task-prefix LETTERS] [--task-url TEMPLATE] [--task-pattern REGEX] [--no-input]
+cairn init --project PARENT --repo REPO [--local] [--name CHILD] [--path DIR] [--context TEXT] [--no-input]
 ```
 
 ## Arguments
@@ -26,6 +27,9 @@ None. A positional argument gives exit code 2.
 | `--task-prefix` | (empty; `T` for `auto`) | 1-5 capital letters (`^[A-Z]{1,5}$`) | Prefix of the `auto` mode: `FEAT` gives `FEAT-1`, `FEAT-2`. Refused with exit 3 with any other mode, and when given alone without `--tasks auto`. |
 | `--task-url` | (empty) | an `http://` or `https://` URL containing `{task}`, up to 500 characters | Template that turns a task into a link; `{task}` is replaced by the base task, without a leading `#` and without its extension (`PROJ-12.1` and `PROJ-12` both give `PROJ-12`, `#128` gives `128`), escaped as one URL path segment. Allowed with every mode. |
 | `--task-pattern` | (empty; when no task flag is given the pattern is `^(?P<base>[A-Z]{2,5}-\d{1,4})(?:\.(?P<ext>\d{1,3}))?$`) | a regular expression with a named group `(?P<base>...)` and optionally `(?P<ext>...)`; at most 200 characters | The format every task ID must match. Given alone, it means `--tasks custom` with this pattern; it also goes with `--tasks custom`, and with no other mode (exit 2). An empty value is refused with exit 3. |
+| `--project` | (empty) | the name of a project registered on this machine | Join that project as a child instead of creating a new one. Needs `--repo`. See Joining a project. |
+| `--repo` | (empty) | one repo name (same rules as `--repos`) | With `--project`: the repo name of this folder. It is added to the parent's repos when missing. |
+| `--local` | `false` | | With `--project`: give the child its own database in `.cairn/cairn.db` instead of attaching it to the parent's. Refused with exit 2 without `--project`. |
 | `--no-input` | `false` | | Never ask questions, even in a terminal; every value comes from the flags or from the defaults. See Interactive questions. |
 
 ## Task numbering
@@ -40,7 +44,19 @@ None. A positional argument gives exit code 2.
 
 With none of `--tasks` and `--task-pattern` (and without questions, see below), `init` keeps the legacy default: mode `custom` with the pattern `^(?P<base>[A-Z]{2,5}-\d{1,4})(?:\.(?P<ext>\d{1,3}))?$`, and writes one line on standard error: `cairn: note: task numbering was not chosen; using the default TP-03 format (see --tasks)`. The project is still created and the exit code is 0. Existing projects are not changed.
 
-`init` has no `--project` and no `--json` flag: it names the project itself.
+`init` has no `--json` flag. Its `--project` flag does not select the project to run in (as other commands do): it names the parent to join.
+
+## Joining a project
+
+`cairn init --project tidepool --repo web` makes the current folder a child of the registered project `tidepool`.
+
+- Attached (the default): the folder gets `.cairn/links.json` (pointer: parent name, parent id, repo; no path) and no database. Commands run inside it use the parent's database, and `cairn add` uses `--repo web` by default. The child is named after its repo.
+- Local (`--local`): the folder gets its own database with the single repo `--repo` (also its default repo), the parent's task settings (mode, pattern, prefix, URL template) and the parent recorded. It is registered as its own project, named `--name` (default: the repo name).
+- `--name` is allowed only with `--local` (exit 2 otherwise).
+- It never asks questions, even in a terminal; `--no-input` is accepted and changes nothing.
+- It cannot be combined with `--repos`, `--mode`, `--default-repo`, `--tasks`, `--task-pattern`, `--task-prefix` or `--task-url` (exit 2): the child takes the parent's task settings and its own repo.
+- Refused with exit 1: the parent is not registered (run `cairn project add <path>` for it), the parent is itself a child or the folder is already a parent (nesting is not supported), the parent already has an active child of that name, or the folder already holds a database or a pointer. A child name or repo that fails validation gives exit 3.
+- The link is recorded in the parent's database. For a project-mode parent that file changes and must be committed; a machine-mode parent prints no such request. If a step fails, the files this call created are removed and the registry is restored; the parent only records the link as detached.
 
 ## Interactive questions
 
@@ -86,7 +102,7 @@ Machine mode prints `(machine mode)` and the database path under the data direct
 
 - `0`: project created and registered.
 - `1`: runtime error: the questions were canceled (Ctrl-D or Ctrl-C), the name is already registered, the folder is already registered, the folder already holds a `.cairn` store, `--path` is not a folder, or a file cannot be written.
-- `2`: usage error: a positional argument was given, or `--task-pattern` was combined with `--tasks auto`, `jira`, `linear` or `github`.
+- `2`: usage error: a positional argument was given, `--project` was combined with a flag it forbids, `--repo` or `--local` was given without `--project`, `--name` with `--project` but without `--local`, or `--task-pattern` was combined with `--tasks auto`, `jira`, `linear` or `github`.
 - `3`: invalid input: name, mode, repos, context, task mode, prefix, URL template or task pattern fails validation, including `--tasks custom` without `--task-pattern` and `--task-prefix` with a mode other than `auto`. Every bad field is listed on standard error, task flags included.
 
 ## Examples
@@ -132,6 +148,24 @@ cairn init --name tidepool --repos server --tasks jira --task-pattern '^TP-\d+$'
 ```
 
 Exit code 2: `--task-pattern` only goes with `--tasks custom`.
+
+```
+cd /work/tidepool-web && cairn init --project tidepool --repo web
+```
+
+Attaches the folder to `tidepool`: writes `.cairn/links.json`, records the child in the parent's database (commit that file), and prints where. Exit code 0.
+
+```
+cd /work/tidepool-web && cairn init --project tidepool --repo web --local --name web
+```
+
+Creates a database of its own for the folder, linked to `tidepool`. Exit code 0.
+
+```
+cairn init --project tidepool --repo web --tasks auto
+```
+
+Exit code 2: a child takes the parent's task settings.
 
 ```
 cairn init --name Tidepool --repos server --tasks auto
