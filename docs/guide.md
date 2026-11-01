@@ -102,7 +102,7 @@ cairn amend n-4k7q2m --agent builder --model claude-opus-5-5 --status done \
 
 - `cairn init --name tidepool --repos server,client --tasks auto --context "Tide data service."` creates a project in the current folder (`--mode machine` keeps the database outside the folder). With a single repo it becomes the default repo automatically; with several, pick one using `--default-repo server`. Only `init` creates a database.
 - `cairn export --format json --out notes.json` and `cairn import notes.json` move notes between databases. Import validates every note and never changes existing data.
-- `cairn project move|add|remove` maintains the machine registry.
+- `cairn project move|add|remove` maintains the machine registry. `cairn project link <child> <path>` records where a child repo lives on this machine (a fresh clone needs it); `cairn project unlink [<child>]` detaches a child without deleting any database or note.
 - `cairn update` replaces the binary with the latest release after checking its SHA-256 (`--check` only reports).
 
 Every command has `--help`. Full reference: the `docs/` folder of the repository.
