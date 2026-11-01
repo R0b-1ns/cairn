@@ -84,7 +84,7 @@ cairn add --stdin --project tidepool < note.json
 | `branch` | string | no | One line, no control characters; at most 200 characters | Branch the work was done on. Set by cairn at write time from `--branch` or the current git branch, unless given; empty on a detached HEAD. |
 | `ref` | string | no | Starts with `http://` or `https://`; at most 500 characters | Link to the ticket. Never set by cairn; given with `--ref` or in JSON. An addendum may carry only a `ref`. |
 
-The addendum must carry at least one of: `entries`, `status`, `resolves`, `supersedes`. Otherwise: `addendum: is empty`.
+The addendum must carry at least one of: `entries`, `status`, `resolves`, `supersedes`, `ref`. Otherwise: `addendum: is empty: give entries, a status, resolves, supersedes or a ref`.
 
 Refused on `amend`:
 

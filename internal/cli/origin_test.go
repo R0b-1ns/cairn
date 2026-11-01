@@ -197,3 +197,16 @@ func TestStdinNewTask(t *testing.T) {
 		t.Errorf("stdin fields: %v %+v", err, n)
 	}
 }
+
+func TestAmendEmptyNeedsSomethingIncludingRef(t *testing.T) {
+	e := newEnv(t)
+	e.initProject()
+	id := addNote(t, e)
+	r := e.run("amend", id, "--agent", "human", "--model", "none")
+	if r.code != 3 || !strings.Contains(r.err, "ref") {
+		t.Errorf("empty: code %d, stderr %q", r.code, r.err)
+	}
+	if r = e.run("amend", id, "--agent", "human", "--model", "none", "--ref", "https://x.org/1"); r.code != 0 {
+		t.Errorf("ref only: code %d, stderr %q", r.code, r.err)
+	}
+}
