@@ -49,6 +49,15 @@
 <option value="{{.Value}}">{{.Label}}</option>
 {{- end}}
 </select>
+{{- if .Children}}
+<label for="f-child">Child</label>
+<select id="f-child" name="child">
+<option value="*">Any</option>
+{{- range .Filters.Children}}
+<option value="{{.Value}}">{{.Label}}</option>
+{{- end}}
+</select>
+{{- end}}
 <label for="f-agent">Agent</label>
 <select id="f-agent" name="agent">
 <option value="*">Any</option>

@@ -66,6 +66,18 @@ Without a terminal, `init` should be given one of these flags; otherwise it fall
 
 To link a ticket after the fact: `cairn amend n-4k7q2m --agent builder --model claude-opus-5-5 --ref https://example.atlassian.net/browse/PROJ-1`. Every note also records who wrote it and on which branch, read from git; `list` filters by `--author`, `--branch` and `--ref`.
 
+### Several repos, one project
+
+A project can span several repositories. Run `init --project <parent> --repo <name> [--local]` in another repo's folder to make it a child of an existing project (for example `--project tidepool --repo web`, from the folder of that repo):
+
+- Attached (the default): no database, only a pointer file `.cairn/links.json`; what you write there goes into the parent's database with that repo.
+- Local (`--local`): the folder keeps its own database, with the parent's task settings. Its notes are not copied to the parent.
+- On a fresh clone of an attached child, run `cairn project link <child> <path>` once so this machine knows where the folder is; `cairn project unlink` detaches a child and deletes nothing.
+- A parent's `search`, `list`, `show`, `brief`, `export --format md` and `view` also read its local children, read-only. It goes one way only: a child never sees its parent's notes.
+- Databases from earlier versions migrate to schema version 5 on first open (a `.v3.bak` or `.v4.bak` copy is kept; `init` adds `.cairn/*.bak` to `.gitignore`).
+
+See `docs/commands/init.md`, `project-link.md` and `project-unlink.md`.
+
 ## Documentation
 
 Reference pages are written for AI models: exact names, tables of defaults and allowed values, copy-pasteable examples.

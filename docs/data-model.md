@@ -11,6 +11,7 @@ Rules that every note, addendum, entry and link follows. Read this before writin
 | addendum | One immutable addition to one note: may set a status, add entries, resolve open entries, supersede decisions, or carry a ticket link (`ref`). | `addenda` | `a-` |
 | entry | One typed piece of text. Belongs to exactly one note or exactly one addendum. | `entries` | `e-` |
 | link | A `resolves` or `supersedes` record from a note or addendum to one entry. | `links` | none |
+| link event | One insert-only record of how projects and repos are joined: kinds `id`, `repo_added`, `child_linked`, `child_detached`, `parent_set`, `parent_cleared` (schema version 5). Holds names, repo names and project ids, never a path. | `link_events` | none |
 
 ## Entry types
 
@@ -39,7 +40,7 @@ A status is one of `done`, `in_progress`, `blocked`. No other value is accepted,
 
 ## Immutability
 
-- Ten triggers exist: `BEFORE UPDATE` and `BEFORE DELETE` on each of `project`, `notes`, `entries`, `addenda`, `links`. Names are `<table>_no_update` and `<table>_no_delete`. Each one aborts with `immutable: <table> rows cannot be modified or deleted`.
+- Each of the tables `project`, `notes`, `entries`, `addenda`, `links` and `link_events` has three triggers: `BEFORE UPDATE`, `BEFORE DELETE` and a guard against replacing a row on `INSERT`. Names are `<table>_no_update`, `<table>_no_delete` and `<table>_no_replace`. The first two abort with `immutable: <table> rows cannot be modified or deleted`, the third with `immutable: <table> rows cannot be replaced`.
 - No command updates or deletes a row. A correction is always an addendum.
 - The `search` full-text index is not covered by the triggers. Code keeps it in step with inserts.
 

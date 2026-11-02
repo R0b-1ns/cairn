@@ -10,6 +10,8 @@ type Hit struct {
 	AddendumID string `json:"addendum_id"` // set when the entry was written in an addendum
 	Type       string `json:"type"`        // entry type, empty for note titles
 	Text       string `json:"text"`        // the real text of the entry or note title, never the index copy
+	// Child names the local child project the hit came from; empty for the current project.
+	Child string `json:"child,omitempty"`
 }
 
 // ftsQuery quotes every term so FTS5 operators and punctuation in user input

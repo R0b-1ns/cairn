@@ -7,7 +7,7 @@
   // matches reports whether a row passes the filters.
   // row: {status, task, taskBase, repo, agent, branches, authors, at, text, closed}, where branches and
   // authors are arrays: for a note, those of the note and its addenda; for an entry, its holder's.
-  // f: {text, status, task, taskIsBase, repo, agent, branch, author, from, to, showClosed}.
+  // f: {text, status, task, taskIsBase, repo, child, agent, branch, author, from, to, showClosed}.
   // task, repo, agent, branch and author use "*" for any (a task may legitimately be "").
   // An author is matched against names and emails, as `cairn list --author` does.
   // A base task (taskIsBase) selects itself and its extensions; any other task selects exactly itself.
@@ -16,6 +16,7 @@
     if (f.status && row.status !== f.status) return false;
     if (f.task !== "*" && (f.taskIsBase ? row.taskBase !== f.task : row.task !== f.task)) return false;
     if (f.repo !== "*" && row.repo !== f.repo) return false;
+    if (f.child && f.child !== "*" && row.child !== f.child) return false;
     if (f.agent !== "*" && row.agent !== f.agent) return false;
     if (f.branch && f.branch !== "*" && (row.branches || []).indexOf(f.branch) < 0) return false;
     if (f.author && f.author !== "*" && (row.authors || []).indexOf(f.author) < 0) return false;
@@ -50,7 +51,7 @@
       if (!e) continue;
       listed++;
       var text = String(e.text).replace(/\s*\n\s*/g, " ");
-      out += "- `" + ids[i] + "` " + (e.by ? "[" + e.by + "] " : "") + text + " (note " + e.note + ")" +
+      out += "- `" + ids[i] + "` " + (e.by ? "[" + e.by + "] " : "") + text + " (note " + e.note + (e.child ? ", child " + e.child : "") + ")" +
         (e.closed ? "  (" + e.closed + ")" : "") + "\n";
     }
     if (listed === 0) out += "No matching " + noun + ".\n";
@@ -96,6 +97,7 @@
       status: value("f-status", ""),
       task: value("f-task", "*"),
       repo: value("f-repo", "*"),
+      child: value("f-child", "*"),
       agent: value("f-agent", "*"),
       branch: value("f-branch", "*"),
       author: value("f-author", "*"),
@@ -113,7 +115,7 @@
     var d = tr.dataset;
     return {
       branches: lines(d.branches), authors: lines(d.authors),
-      status: d.status || "", task: d.task || "", taskBase: d.taskBase || "", repo: d.repo || "", agent: d.agent || "",
+      status: d.status || "", task: d.task || "", taskBase: d.taskBase || "", repo: d.repo || "", child: d.child || "", agent: d.agent || "",
       at: d.at || "", text: d.text || "", closed: d.closed === "true"
     };
   }

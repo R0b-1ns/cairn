@@ -24,7 +24,13 @@ None. The command accepts no flags.
 registered tidepool at /work/tidepool
 ```
 
-The name is the project name stored inside the database. The path is stored as an absolute path with symlinks resolved.
+The name is the project name stored inside the database. The path is stored as an absolute path with symlinks resolved. The project id stored in the database is recorded in the registry too.
+
+When the project has linked children, one extra line is printed for each child, because this machine does not know where the child lives yet:
+
+```
+no path known for child web; run: cairn project link web <path>
+```
 
 ## Exit codes
 
@@ -50,4 +56,5 @@ Run a second time: exit code 1, because the folder is already registered.
 
 - Only project-mode databases can be added. A machine-mode database lives in the data directory and is registered by `cairn init --mode machine`.
 - `project add` does not change the database; it only writes the registry.
+- Later commands print a `cairn: warning` line on standard error (exit code unchanged) when the registry id of a project differs from the id in its database; the warning suggests `cairn project remove` then `cairn project add`.
 - Use `cairn projects` to see what is registered.

@@ -100,3 +100,25 @@ const DefaultTaskPattern = `^(?P<base>[A-Z]{2,5}-\d{1,4})(?:\.(?P<ext>\d{1,3}))?
 
 // UnknownModel is the model name reserved for imported notes.
 const UnknownModel = "unknown"
+
+// ChildKind says how a child project is linked to its parent.
+type ChildKind string
+
+// Kinds of child.
+const (
+	ChildAttached ChildKind = "attached" // a repo with its own pointer file, using the parent's database
+	ChildLocal    ChildKind = "local"    // a repo with its own database
+)
+
+// Child is a project linked below a parent.
+type Child struct {
+	Name string    `json:"name"`
+	Repo string    `json:"repo"`
+	Kind ChildKind `json:"kind"`
+}
+
+// ParentRef names the parent project of a child.
+type ParentRef struct {
+	Name string
+	ID   string
+}

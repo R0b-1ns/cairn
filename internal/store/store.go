@@ -115,6 +115,48 @@ func Open(path string) (*Store, error) {
 	return s, nil
 }
 
+// NeedsMigrationError says a database is older than this build and was left
+// untouched by OpenCurrent.
+type NeedsMigrationError struct {
+	Path    string
+	Version int
+}
+
+func (e *NeedsMigrationError) Error() string {
+	return fmt.Sprintf("the database %s has schema version %d, older than %d: run any cairn command inside that repo once to upgrade it",
+		e.Path, e.Version, SchemaVersion)
+}
+
+// OpenCurrent opens a database that belongs to another repo for reading its
+// state. It makes every check Open makes except that it never migrates, never
+// copies a backup and never writes: an older schema is a *NeedsMigrationError.
+func OpenCurrent(path string) (*Store, error) {
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", path)
+	}
+	db, err := sql.Open("sqlite", dsn(path, "rw"))
+	if err != nil {
+		return nil, err
+	}
+	s := &Store{db: db, path: path}
+	var v int
+	if err := db.QueryRow("PRAGMA user_version").Scan(&v); err == nil {
+		if _, old := migrationFrom(v); old {
+			db.Close()
+			return nil, &NeedsMigrationError{Path: path, Version: v}
+		}
+	}
+	if err := s.verify(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return s, nil
+}
+
 func (s *Store) verify() error {
 	var v int
 	if err := s.db.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
@@ -158,7 +200,7 @@ func verifyShape(q querier, v int) error {
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	for name, want := range triggerSQL() {
+	for name, want := range triggerSQLFor(v) {
 		got, ok := have[name]
 		if !ok {
 			return fmt.Errorf("immutability trigger %s is missing: database refused", name)
@@ -251,8 +293,15 @@ func (s *Store) Project() (model.Project, error) {
 	if err != nil {
 		return p, err
 	}
-	err = json.Unmarshal([]byte(repos), &p.Repos)
-	return p, err
+	if err = json.Unmarshal([]byte(repos), &p.Repos); err != nil {
+		return p, err
+	}
+	extra, err := s.addedRepos(s.db)
+	if err != nil {
+		return p, err
+	}
+	p.Repos = mergeRepos(p.Repos, extra)
+	return p, nil
 }
 
 type execer interface {

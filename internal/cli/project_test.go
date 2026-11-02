@@ -8,7 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/R0b-1ns/cairn/internal/locate"
 	"github.com/R0b-1ns/cairn/internal/model"
+	"github.com/R0b-1ns/cairn/internal/registry"
+	"github.com/R0b-1ns/cairn/internal/store"
 	"github.com/R0b-1ns/cairn/internal/tasks"
 	_ "modernc.org/sqlite"
 )
@@ -451,5 +454,187 @@ func TestContextShowsTaskMode(t *testing.T) {
 	out = e2.mustRun("context").out
 	if !strings.Contains(out, "\ntask mode: jira\ntask url: https://x.example/browse/{task}\n") {
 		t.Errorf("jira:\n%s", out)
+	}
+}
+
+// tidepoolStore opens the project-mode database in dir.
+func tidepoolStore(t *testing.T, dir string) *store.Store {
+	t.Helper()
+	s, err := store.Open(filepath.Join(dir, ".cairn", "cairn.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	return s
+}
+
+// attachChild links an attached child folder with the given repo to the project in e.root.
+func attachChild(t *testing.T, e *testEnv, repo, parentID string) string {
+	t.Helper()
+	s := tidepoolStore(t, e.root)
+	if err := s.AddRepo(repo); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LinkChild(model.Child{Name: repo, Repo: repo, Kind: model.ChildAttached}); err != nil {
+		t.Fatal(err)
+	}
+	child := realTemp(t)
+	if err := locate.WritePointer(child, locate.Pointer{Parent: "tidepool", ParentID: parentID, Repo: repo}); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Open(e.home).SetChild("tidepool", repo, child); err != nil {
+		t.Fatal(err)
+	}
+	return child
+}
+
+func noteRepos(t *testing.T, e *testEnv) []string {
+	t.Helper()
+	db, err := sql.Open("sqlite", filepath.Join(e.root, ".cairn", "cairn.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	rows, err := db.Query(`SELECT repo FROM notes ORDER BY rowid`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var r string
+		rows.Scan(&r)
+		out = append(out, r)
+	}
+	return out
+}
+
+func addFlagsNoRepo() []string {
+	return append([]string{"add", "--agent", "builder", "--task", "TP-03",
+		"--model", "claude-test", "--title", "Wire ingest", "--status", "done",
+		"--change", "Added ingest loop"}, noneBut("change")...)
+}
+
+func TestAttachedChildDefaultsToItsRepo(t *testing.T) {
+	e := newAddEnv(t)
+	child := attachChild(t, e, "web", "")
+	if r := e.runIn(child, "", addFlagsNoRepo()...); r.code != 0 {
+		t.Fatalf("add in child: %+v", r)
+	}
+	if r := e.runIn(child, "", append(addFlagsNoRepo(), "--repo", "server")...); r.code != 0 {
+		t.Fatalf("add --repo server: %+v", r)
+	}
+	got := noteRepos(t, e)
+	if len(got) != 2 || got[0] != "web" || got[1] != "server" {
+		t.Fatalf("repos = %v, want [web server]", got)
+	}
+}
+
+func TestInitRecordsProjectID(t *testing.T) {
+	e := newEnv(t)
+	e.initProject()
+	st := tidepoolStore(t, e.root)
+	ls, err := st.Links()
+	if err != nil || ls.ID == "" {
+		t.Fatalf("links: %+v %v", ls, err)
+	}
+	var n int
+	db, _ := sql.Open("sqlite", filepath.Join(e.root, ".cairn", "cairn.db"))
+	defer db.Close()
+	db.QueryRow(`SELECT count(*) FROM link_events WHERE kind='id'`).Scan(&n)
+	if n != 1 {
+		t.Fatalf("id events = %d", n)
+	}
+	ent, err := registry.Open(e.home).Get("tidepool")
+	if err != nil || ent.ID != ls.ID {
+		t.Fatalf("registry id %q, db id %q (%v)", ent.ID, ls.ID, err)
+	}
+}
+
+func TestProjectAddRegistersIDAndListsMissingChildren(t *testing.T) {
+	e := newEnv(t)
+	e.initProject()
+	s := tidepoolStore(t, e.root)
+	for _, c := range []model.Child{{Name: "web", Repo: "web", Kind: model.ChildAttached}, {Name: "api", Repo: "api", Kind: model.ChildLocal}} {
+		if err := s.LinkChild(c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	id, _ := s.EnsureProjectID()
+	clone := realTemp(t)
+	copyDir(t, filepath.Join(e.root, ".cairn"), filepath.Join(clone, ".cairn"))
+	other := newEnv(t)
+	r := other.runIn(realTemp(t), "", "project", "add", clone)
+	if r.code != 0 {
+		t.Fatalf("add: %+v", r)
+	}
+	want := "registered tidepool at " + clone + "\n" +
+		"no path known for child web; run: cairn project link web <path>\n" +
+		"no path known for child api; run: cairn project link api <path>\n"
+	if r.out != want {
+		t.Fatalf("out:\n%s\nwant:\n%s", r.out, want)
+	}
+	ent, err := registry.Open(other.home).Get("tidepool")
+	if err != nil || ent.ID != id {
+		t.Fatalf("entry id %q want %q (%v)", ent.ID, id, err)
+	}
+}
+
+func TestRegistryIDMismatchWarns(t *testing.T) {
+	e := newEnv(t)
+	e.initProject()
+	if err := registry.Open(e.home).SetID("tidepool", "p-zzzzzzzzzz"); err != nil {
+		t.Fatal(err)
+	}
+	r := e.run("context")
+	if r.code != 0 {
+		t.Fatalf("context: %+v", r)
+	}
+	if !strings.Contains(r.err, "cairn: warning") || !strings.Contains(r.err, "cairn project remove") || !strings.Contains(r.err, "cairn project add") {
+		t.Fatalf("stderr: %q", r.err)
+	}
+}
+
+func TestPointerParentIDMismatchRefused(t *testing.T) {
+	e := newAddEnv(t)
+	child := attachChild(t, e, "web", "p-yyyyyyyyyy")
+	r := e.runIn(child, "", "context")
+	if r.code == 0 || !strings.Contains(r.err, "cairn project unlink") {
+		t.Fatalf("mismatch: %+v", r)
+	}
+	id, _ := tidepoolStore(t, e.root).EnsureProjectID()
+	ok := attachChild(t, e, "api", id)
+	if r := e.runIn(ok, "", "context"); r.code != 0 {
+		t.Fatalf("match: %+v", r)
+	}
+	// an unlinked folder is refused with the exact link command
+	stray := realTemp(t)
+	locate.WritePointer(stray, locate.Pointer{Parent: "tidepool", Repo: "web"})
+	r = e.runIn(stray, "", "context")
+	if r.code == 0 || !strings.Contains(r.err, "cairn project link --project tidepool web "+locate.ShellQuote(stray)) {
+		t.Fatalf("stray: %+v", r)
+	}
+}
+
+func TestHostileChildNameNeverReachesTerminal(t *testing.T) {
+	e := newEnv(t)
+	e.initProject()
+	db, err := sql.Open("sqlite", filepath.Join(e.root, ".cairn", "cairn.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO link_events(kind,name,repo,child_kind) VALUES ('child_linked', ?, 'web', 'attached')`, "evil\x1b[2Jname"); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	clone := realTemp(t)
+	copyDir(t, filepath.Join(e.root, ".cairn"), filepath.Join(clone, ".cairn"))
+	other := newEnv(t)
+	r := other.runIn(realTemp(t), "", "project", "add", clone)
+	if r.code == 0 {
+		t.Fatalf("a database with a hostile child name must be refused: %+v", r)
+	}
+	if strings.Contains(r.out+r.err, "\x1b") {
+		t.Fatalf("escape sequence reached the terminal: %q", r.out+r.err)
 	}
 }

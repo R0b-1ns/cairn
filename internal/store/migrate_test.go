@@ -2,6 +2,8 @@ package store
 
 import (
 	"bytes"
+	"errors"
+	"github.com/R0b-1ns/cairn/internal/model"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,28 +50,15 @@ func userVersion(t *testing.T, path string) int {
 	return v
 }
 
-func TestFreshDatabaseIsVersion4(t *testing.T) {
-	s, path := newStore(t)
-	s.Close()
-	if v := userVersion(t, path); v != 4 {
-		t.Fatalf("user_version = %d, want 4", v)
-	}
-	s2, err := Open(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s2.Close()
-}
-
-func TestMigrateV3ToV4(t *testing.T) {
+func TestMigrateV3ToV5(t *testing.T) {
 	path := makeV3(t)
 	s, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if v := userVersion(t, path); v != 4 {
-		t.Fatalf("user_version = %d, want 4", v)
+	if v := userVersion(t, path); v != 5 {
+		t.Fatalf("user_version = %d, want 5", v)
 	}
 	n, err := s.GetNote("n-old")
 	if err != nil {
@@ -156,7 +145,7 @@ func TestOldVersionStillRefused(t *testing.T) {
 	}
 	db.Close()
 	_, err := Open(path)
-	if err == nil || !strings.Contains(err.Error(), "unsupported database version 2 (this build supports 4)") {
+	if err == nil || !strings.Contains(err.Error(), "unsupported database version 2 (this build supports 5)") {
 		t.Fatalf("got %v", err)
 	}
 }
@@ -207,7 +196,7 @@ func TestExistingBackupIsOverwritten(t *testing.T) {
 	}
 }
 
-func TestV4DatabaseMakesNoBackup(t *testing.T) {
+func TestCurrentDatabaseMakesNoBackup(t *testing.T) {
 	s, path := newStore(t)
 	s.Close()
 	s2, err := Open(path)
@@ -266,13 +255,53 @@ func TestNewerVersionSaysUpdate(t *testing.T) {
 	s, path := newStore(t)
 	s.Close()
 	db := rawDB(t, path)
-	if _, err := db.Exec("PRAGMA user_version = 5"); err != nil {
+	if _, err := db.Exec("PRAGMA user_version = 6"); err != nil {
 		t.Fatal(err)
 	}
 	db.Close()
 	_, err := Open(path)
-	want := "unsupported database version 5 (this build supports 4); run 'cairn update' to upgrade"
+	want := "unsupported database version 6 (this build supports 5); run 'cairn update' to upgrade"
 	if err == nil || err.Error() != want {
 		t.Fatalf("got %v, want %q", err, want)
 	}
+}
+
+func TestOpenCurrentNeverWrites(t *testing.T) {
+	path := makeV3(t)
+	db := rawDB(t, path)
+	if _, err := db.Exec(migrations[0].sql); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("PRAGMA user_version = 4"); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	before, _ := os.ReadFile(path)
+	fiBefore, _ := os.Stat(path)
+	_, err := OpenCurrent(path)
+	var nm *NeedsMigrationError
+	if !errors.As(err, &nm) || nm.Version != 4 || nm.Path != path || !strings.Contains(err.Error(), path) {
+		t.Fatalf("err = %v", err)
+	}
+	after, _ := os.ReadFile(path)
+	fiAfter, _ := os.Stat(path)
+	if !bytes.Equal(before, after) || !fiBefore.ModTime().Equal(fiAfter.ModTime()) {
+		t.Error("the file changed")
+	}
+	matches, _ := filepath.Glob(path + "*")
+	if len(matches) != 1 {
+		t.Errorf("extra files: %v", matches)
+	}
+	// A current database behaves like Open.
+	cur := filepath.Join(t.TempDir(), "cairn.db")
+	c, err := Create(cur, model.Project{Name: "p", Mode: "project", Repos: []string{"a"}, TaskPattern: "^x$"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Close()
+	s, err := OpenCurrent(cur)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
 }

@@ -65,35 +65,62 @@ func defineBrief(fs *flag.FlagSet) Handler {
 			return code
 		}
 		defer s.Close()
-		flt, ok := taskFilter(s.Proj, args[0])
-		if !ok {
-			return fail(c, ExitUsage, "%q does not match the task pattern %s", args[0], s.Proj.TaskPattern)
-		}
-		headers, err := s.St.NoteHeaders(store.NoteFilter{TaskBase: flt.TaskBase, Task: flt.Task, Branch: branch, Author: author})
-		if err != nil {
-			return fail(c, ExitRuntime, "%v", err)
-		}
-		query := func(t model.EntryType, st store.StateFilter) ([]store.EntryInfo, error) {
-			q := flt
-			q.Branch, q.Author = branch, author
-			q.Types, q.State = []model.EntryType{t}, st
-			items, _, err := s.St.ListEntries(q)
-			for i, j := 0, len(items)-1; i < j; i, j = i+1, j-1 { // oldest first reads best
-				items[i], items[j] = items[j], items[i]
+		sc := openScope(c, s)
+		defer sc.Close()
+		var headers []store.NoteHeader
+		var changes, decisions, opens []store.EntryInfo
+		var refs []string
+		seenRef := map[string]bool{}
+		accepted := false
+		for _, src := range sc.Sources {
+			flt, ok := taskFilter(src.Proj, args[0])
+			if !ok {
+				continue // this source numbers its tasks differently
 			}
-			return items, err
-		}
-		changes, err1 := query(model.TypeChange, store.StateAll)
-		decisions, err2 := query(model.TypeDecision, store.StateActive)
-		opens, err3 := query(model.TypeOpen, store.StateActive)
-		for _, err := range []error{err1, err2, err3} {
+			accepted = true
+			hs, err := src.St.NoteHeaders(store.NoteFilter{TaskBase: flt.TaskBase, Task: flt.Task, Branch: branch, Author: author})
 			if err != nil {
 				return fail(c, ExitRuntime, "%v", err)
 			}
+			for i := range hs {
+				hs[i].Child = src.Child
+			}
+			headers = append(headers, hs...)
+			query := func(t model.EntryType, st store.StateFilter) ([]store.EntryInfo, error) {
+				q := flt
+				q.Branch, q.Author = branch, author
+				q.Types, q.State = []model.EntryType{t}, st
+				items, _, err := src.St.ListEntries(q)
+				for i, j := 0, len(items)-1; i < j; i, j = i+1, j-1 { // oldest first reads best
+					items[i], items[j] = items[j], items[i]
+				}
+				for i := range items {
+					items[i].Child = src.Child
+				}
+				return items, err
+			}
+			ch, err1 := query(model.TypeChange, store.StateAll)
+			de, err2 := query(model.TypeDecision, store.StateActive)
+			op, err3 := query(model.TypeOpen, store.StateActive)
+			for _, err := range []error{err1, err2, err3} {
+				if err != nil {
+					return fail(c, ExitRuntime, "%v", err)
+				}
+			}
+			changes, decisions, opens = append(changes, ch...), append(decisions, de...), append(opens, op...)
+			rs, err := briefRefs(&session{St: src.St, Proj: src.Proj}, args[0], flt)
+			if err != nil {
+				return fail(c, ExitRuntime, "%v", err)
+			}
+			for _, r := range rs {
+				if !seenRef[r] {
+					seenRef[r] = true
+					refs = append(refs, r)
+				}
+			}
 		}
-		refs, err := briefRefs(s, args[0], flt)
-		if err != nil {
-			return fail(c, ExitRuntime, "%v", err)
+		if !accepted {
+			return fail(c, ExitUsage, "%q does not match the task pattern %s", args[0], s.Proj.TaskPattern)
 		}
 		if f.json {
 			out := map[string]any{"task": args[0],
@@ -103,6 +130,9 @@ func defineBrief(fs *flag.FlagSet) Handler {
 				"open": nonNil(capped(opens, f.max)), "open_total": len(opens)}
 			if len(refs) > 0 {
 				out["refs"] = refs // omitted when empty, so older output is unchanged
+			}
+			if pl, err := s.St.Links(); err == nil && len(pl.Children) > 0 {
+				out["missing_children"] = nonNil(sc.Missing) // only for a project with links
 			}
 			printJSON(c, out)
 			return ExitOK
@@ -131,6 +161,7 @@ func defineBrief(fs *flag.FlagSet) Handler {
 			if o := briefOrigin(h.AuthorName, h.AuthorEmail, h.Branch); o != "" {
 				line += " " + o
 			}
+			line += childLabel(h.Child)
 			lines = append(lines, line)
 		}
 		printSection(c, lines, f.max)
@@ -141,7 +172,7 @@ func defineBrief(fs *flag.FlagSet) Handler {
 			fmt.Fprintf(c.Stdout, "%s:\n", sec.name)
 			var ls []string
 			for _, e := range sec.items {
-				ls = append(ls, entryLine(e))
+				ls = append(ls, entryLine(e)+childLabel(e.Child))
 			}
 			printSection(c, ls, f.max)
 		}

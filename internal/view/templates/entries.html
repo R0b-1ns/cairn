@@ -12,6 +12,9 @@
 <th scope="col" data-sort="id"><button type="button">ID</button></th>
 <th scope="col" data-sort="task"><button type="button">Task</button></th>
 <th scope="col" data-sort="repo"><button type="button">Repo</button></th>
+{{- if .Children}}
+<th scope="col" data-sort="child"><button type="button">Child</button></th>
+{{- end}}
 <th scope="col" data-sort="at" aria-sort="descending"><button type="button">Date</button></th>
 <th scope="col" data-sort="body"><button type="button">Text</button></th>
 {{- if .Content.Author}}
@@ -23,11 +26,15 @@
 </thead>
 <tbody>
 {{- $author := .Content.Author}}
+{{- $children := .Children}}
 {{- range .Content.Rows}}
-<tr data-id="{{.ID}}" data-task="{{.Task}}" data-task-base="{{.TaskBase}}" data-repo="{{.Repo}}" data-agent="{{.Agent}}" data-branches="{{.Branches}}" data-authors="{{.Authors}}" data-at="{{.At}}" data-body="{{.Text}}" data-by="{{.By}}" data-state="{{.State}}" data-note="{{.NoteID}}" data-text="{{.Search}}" data-closed="{{.Closed}}"{{if .Closed}} class="closed" hidden{{end}}>
+<tr data-id="{{.ID}}" data-task="{{.Task}}" data-task-base="{{.TaskBase}}" data-repo="{{.Repo}}"{{if $children}} data-child="{{.Child}}"{{end}} data-agent="{{.Agent}}" data-branches="{{.Branches}}" data-authors="{{.Authors}}" data-at="{{.At}}" data-body="{{.Text}}" data-by="{{.By}}" data-state="{{.State}}" data-note="{{.NoteID}}" data-text="{{.Search}}" data-closed="{{.Closed}}"{{if .Closed}} class="closed" hidden{{end}}>
 <td><code>{{.ID}}</code></td>
 <td>{{dash .Task}}</td>
 <td>{{.Repo}}</td>
+{{- if $children}}
+<td>{{dash .Child}}</td>
+{{- end}}
 <td class="nowrap"><time datetime="{{.At}}">{{date .At}}</time></td>
 <td class="text">{{.Text}}</td>
 {{- if $author}}

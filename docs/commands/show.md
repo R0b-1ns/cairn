@@ -58,10 +58,14 @@ e-7h2m9q  decision [user] Index buckets are hourly, to match the sensor rate.
 
 `--json` for a note prints the note's fields (`id`, `agent`, `repo`, `at`, `task`, `model`, `title`, `status`, `entries`, `none`, `impacts`, `commits`, `resolves`, `supersedes`, and, when set, `author_name`, `author_email`, `branch`, `ref`) plus `current_status`, `refs` when there is at least one (an array of the links of the `ref:` lines, in the same order, computed link included; omitted when empty) and `addenda` (the addenda, as objects with `id`, `note_id`, `agent`, `model`, `at`, `status`, `entries`, `resolves`, `supersedes`, and, when set, `author_name`, `author_email`, `branch`, `ref`). For an addendum it prints the addendum object. For an entry it prints the entry object with `id`, `type`, `text`, `by`, `note_id`, `addendum_id`, `task`, `repo`, `at`, `closed`, `closed_by`, `closed_at`.
 
+## Local children
+
+`show` looks the ID up in the current project and in each active local child of a parent (read-only; reading goes one way, parent to child). Found in exactly one database, it is printed as above; for a child it gains a line `child: <name>` after the first line, and with `--json` the object gains the key `child`. Found in none, the ID does not exist (`not found`, exit 1). Found in more than one database, `show` prints nothing, names the databases (the current project and the children) on standard error and exits 1; run the command inside the one you mean. A child that cannot be read is skipped with a `cairn: warning: ...` line on standard error naming the command to run (`cairn project link --project <parent> <name> <path>`).
+
 ## Exit codes
 
 - `0`: printed.
-- `1`: runtime error, or the ID does not exist in the project (`n-4k7q2m not found`).
+- `1`: runtime error, the ID does not exist in the project or its local children (`n-4k7q2m not found`), or the ID exists in more than one of them.
 - `2`: usage error: not exactly one argument, or the argument is not a valid note, addendum or entry ID.
 - `4`: no project found.
 

@@ -32,6 +32,8 @@ type EntryInfo struct {
 	Closed     bool   `json:"closed"`
 	ClosedBy   string `json:"closed_by"` // ID of the note or addendum that closes it
 	ClosedAt   string `json:"closed_at"`
+	// Child names the local child project the entry came from; empty for the current project.
+	Child string `json:"child,omitempty"`
 }
 
 // MarshalJSON always emits every key so consumers can rely on the shape.
@@ -49,7 +51,8 @@ func (e EntryInfo) MarshalJSON() ([]byte, error) {
 		Closed     bool            `json:"closed"`
 		ClosedBy   string          `json:"closed_by"`
 		ClosedAt   string          `json:"closed_at"`
-	}{e.ID, e.Type, e.Text, e.By, e.NoteID, e.AddendumID, e.Task, e.Repo, e.At, e.Closed, e.ClosedBy, e.ClosedAt})
+		Child      string          `json:"child,omitempty"`
+	}{e.ID, e.Type, e.Text, e.By, e.NoteID, e.AddendumID, e.Task, e.Repo, e.At, e.Closed, e.ClosedBy, e.ClosedAt, e.Child})
 }
 
 const entrySelect = `

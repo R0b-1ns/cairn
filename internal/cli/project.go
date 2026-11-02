@@ -28,8 +28,9 @@ func init() {
 func defineInit(fs *flag.FlagSet) Handler {
 	var p model.Project
 	var repos, path, taskMode string
-	var noInput bool
-	fs.StringVar(&p.Name, "name", "", "project name: lowercase letters, digits, - and _ (required)")
+	var noInput, local bool
+	var parent, repo string
+	fs.StringVar(&p.Name, "name", "", "project name: lowercase letters, digits, - and _ (required; with --project only with --local, default: the --repo value)")
 	fs.StringVar(&p.Mode, "mode", model.ModeProject, "storage mode: project (database in .cairn/) or machine (database in the data directory)")
 	fs.StringVar(&path, "path", "", "project root folder (default: current directory)")
 	fs.StringVar(&p.Context, "context", "", "a few lines describing the project")
@@ -39,12 +40,32 @@ func defineInit(fs *flag.FlagSet) Handler {
 	fs.StringVar(&taskMode, "tasks", "", "task numbering mode: "+strings.Join(tasks.Modes(), ", ")+" (see --task-pattern for the default when omitted)")
 	fs.StringVar(&p.TaskPrefix, "task-prefix", "", "1-5 capital letters for the auto mode (default: T)")
 	fs.StringVar(&p.TaskURL, "task-url", "", "link template containing {task}, for example https://example.com/browse/{task}")
+	fs.StringVar(&parent, "project", "", "join this registered project as a child instead of creating a new one (needs --repo); the child takes the parent's task settings")
+	fs.StringVar(&repo, "repo", "", "with --project: the repo name of this folder in the parent project")
+	fs.BoolVar(&local, "local", false, "with --project: give the child its own database instead of attaching it to the parent's")
 	fs.BoolVar(&noInput, "no-input", false, "do not ask questions even in a terminal")
 	return func(c *Ctx, args []string) int {
 		if len(args) != 0 {
 			return fail(c, ExitUsage, "init takes no arguments")
 		}
 		given := setFlags(fs)
+		if given["project"] || given["repo"] || given["local"] {
+			if !given["project"] {
+				return fail(c, ExitUsage, "--repo and --local only go with --project")
+			}
+			for _, f := range []string{"repos", "mode", "default-repo", "tasks", "task-pattern", "task-prefix", "task-url"} {
+				if given[f] {
+					return fail(c, ExitUsage, "--%s cannot be combined with --project: a child takes the parent's task settings and its own repo", f)
+				}
+			}
+			if given["context"] && !local {
+				return fail(c, ExitUsage, "--context with --project needs --local (an attached child has no database of its own)")
+			}
+			if given["name"] && !local {
+				return fail(c, ExitUsage, "--name with --project needs --local (an attached child is named after its repo)")
+			}
+			return initChild(c, parent, repo, p.Name, local, path, p.Context)
+		}
 		if c.Interactive && !noInput {
 			v := &initValues{P: &p, Repos: &repos, Path: &path, TaskMode: &taskMode}
 			if err := askInit(c, given, v); err != nil {
@@ -131,6 +152,11 @@ func defineInit(fs *flag.FlagSet) Handler {
 				return fail(c, ExitRuntime, "project %q is already registered for %s", e.Name, root)
 			}
 		}
+		if _, found, err := locate.ReadPointer(root); err != nil {
+			return fail(c, ExitRuntime, "%s", sanitize(err.Error()))
+		} else if found {
+			return fail(c, ExitRuntime, "%s still holds a pointer to a parent project (.cairn/links.json); run inside it first: cairn project unlink", sanitize(root))
+		}
 		var dbPath string
 		if p.Mode == model.ModeProject {
 			existing, found, err := locate.CheckStore(root)
@@ -151,13 +177,22 @@ func defineInit(fs *flag.FlagSet) Handler {
 		if err != nil {
 			return fail(c, ExitRuntime, "%v", err)
 		}
+		id, err := st.EnsureProjectID()
 		st.Close()
-		if err := reg.Register(registry.Entry{Name: p.Name, Mode: p.Mode, Path: root}); err != nil {
+		if err != nil {
+			os.Remove(dbPath)
+			os.Remove(filepath.Dir(dbPath))
+			return fail(c, ExitRuntime, "%v", err)
+		}
+		if err := reg.Register(registry.Entry{Name: p.Name, Mode: p.Mode, Path: root, ID: id}); err != nil {
 			os.Remove(dbPath)
 			os.Remove(filepath.Dir(dbPath))
 			return fail(c, ExitRuntime, "%v", err)
 		}
 		fmt.Fprintf(c.Stdout, "initialized project %s (%s mode) at %s\ndatabase: %s\n", p.Name, p.Mode, root, dbPath)
+		if p.Mode == model.ModeProject {
+			ignoreBackups(c, root)
+		}
 		if legacy {
 			fmt.Fprintln(c.Stderr, "cairn: note: task numbering was not chosen; using the default TP-03 format (see --tasks)")
 		}
@@ -359,6 +394,10 @@ func defineProjectAdd(fs *flag.FlagSet) Handler {
 			return fail(c, ExitRuntime, "%v", err)
 		}
 		p, err := st.Project()
+		var ls store.LinkState
+		if err == nil {
+			ls, err = st.Links()
+		}
 		st.Close()
 		if err != nil {
 			return fail(c, ExitRuntime, "%v", err)
@@ -370,10 +409,13 @@ func defineProjectAdd(fs *flag.FlagSet) Handler {
 		if err != nil {
 			return fail(c, ExitRuntime, "%v", err)
 		}
-		if err := reg.Register(registry.Entry{Name: p.Name, Mode: model.ModeProject, Path: root}); err != nil {
+		if err := reg.Register(registry.Entry{Name: p.Name, Mode: model.ModeProject, Path: root, ID: ls.ID}); err != nil {
 			return regErr(c, err)
 		}
-		fmt.Fprintf(c.Stdout, "registered %s at %s\n", p.Name, root)
+		fmt.Fprintf(c.Stdout, "registered %s at %s\n", sanitize(p.Name), sanitize(root))
+		for _, ch := range ls.Children {
+			fmt.Fprintf(c.Stdout, "no path known for child %s; run: cairn project link %s <path>\n", sanitize(ch.Name), sanitize(ch.Name))
+		}
 		return ExitOK
 	}
 }

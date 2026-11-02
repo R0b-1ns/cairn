@@ -25,6 +25,10 @@ type Entry struct {
 	Name string `json:"name"`
 	Mode string `json:"mode"` // "project" or "machine"
 	Path string `json:"path"`
+	// ID is the project id (optional, additive; registry stays version 1).
+	ID string `json:"id,omitempty"`
+	// Children maps a child name to its absolute folder on this machine.
+	Children map[string]string `json:"children,omitempty"`
 }
 
 type fileFormat struct {
@@ -253,5 +257,48 @@ func (r *Registry) Remove(name string) error {
 			}
 		}
 		return nil, fmt.Errorf("%w: %s", ErrNotFound, name)
+	})
+}
+
+// mutate runs fn on the named entry under the registry lock (ErrNotFound if absent).
+func (r *Registry) mutate(name string, fn func(*Entry)) error {
+	return r.update(func(es []Entry) ([]Entry, error) {
+		for i := range es {
+			if es[i].Name == name {
+				fn(&es[i])
+				return es, nil
+			}
+		}
+		return nil, fmt.Errorf("%w: %s", ErrNotFound, name)
+	})
+}
+
+// SetID records the project id of a registered project (ErrNotFound).
+func (r *Registry) SetID(name, id string) error {
+	return r.mutate(name, func(e *Entry) { e.ID = id })
+}
+
+// SetChild records the folder of a child of parent, normalized (ErrNotFound).
+func (r *Registry) SetChild(parent, child, path string) error {
+	p, err := NormalizePath(path)
+	if err != nil {
+		return err
+	}
+	return r.mutate(parent, func(e *Entry) {
+		if e.Children == nil {
+			e.Children = map[string]string{}
+		}
+		e.Children[child] = p
+	})
+}
+
+// RemoveChild forgets the folder of a child of parent. A child without a
+// recorded path is not an error; an unknown parent is ErrNotFound.
+func (r *Registry) RemoveChild(parent, child string) error {
+	return r.mutate(parent, func(e *Entry) {
+		delete(e.Children, child)
+		if len(e.Children) == 0 {
+			e.Children = nil
+		}
 	})
 }

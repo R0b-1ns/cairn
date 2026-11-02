@@ -6,10 +6,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 )
 
 // migration upgrades a database from schema version `from` to from+1.
-// Steps must only add things (ALTER TABLE ... ADD COLUMN), never rewrite rows.
+// Steps must only add things (ALTER TABLE ... ADD COLUMN, CREATE TABLE), never
+// rewrite rows.
 type migration struct {
 	from int
 	sql  string
@@ -29,6 +32,34 @@ ALTER TABLE project ADD COLUMN task_mode TEXT NOT NULL DEFAULT '';
 ALTER TABLE project ADD COLUMN task_prefix TEXT NOT NULL DEFAULT '';
 ALTER TABLE project ADD COLUMN task_url TEXT NOT NULL DEFAULT '';
 `},
+	{from: 4, sql: linkEventsSQL()},
+}
+
+// linkEventsSQL is the version 5 step: the append-only link_events table and
+// its immutability triggers. It reads and changes no existing row.
+func linkEventsSQL() string {
+	var b strings.Builder
+	b.WriteString(`
+CREATE TABLE link_events (
+	seq INTEGER PRIMARY KEY,
+	kind TEXT NOT NULL CHECK (kind IN ('id','repo_added','child_linked','child_detached','parent_set','parent_cleared')),
+	name TEXT NOT NULL DEFAULT '',
+	repo TEXT NOT NULL DEFAULT '',
+	child_kind TEXT NOT NULL DEFAULT '' CHECK (child_kind IN ('','attached','local')),
+	parent_id TEXT NOT NULL DEFAULT ''
+);
+`)
+	trig := triggersFor(linkEventTables)
+	names := make([]string, 0, len(trig))
+	for n := range trig {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		b.WriteString(trig[n])
+		b.WriteString(";\n")
+	}
+	return b.String()
 }
 
 // stmtExecer runs statements; satisfied by *sql.DB and *sql.Tx.

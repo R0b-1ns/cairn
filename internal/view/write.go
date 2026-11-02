@@ -50,6 +50,7 @@ type option struct {
 // filters are the values offered by the sidebar selects.
 type filters struct {
 	Statuses, Tasks, Repos, Agents, Branches, Authors []option
+	Children                                          []option // only when a note comes from a child
 }
 
 // page is what the layout needs, plus the content of one page.
@@ -59,6 +60,7 @@ type page struct {
 	Generated string
 	Root      string // "" at the top, "../" on note pages
 	Active    string // notes, decisions, open, helpers, or note
+	Children  bool   // some note comes from a local child: show the Child column and filter
 	Listing   bool   // shows filters, count and download, and loads data.js
 	Notes     bool   // the Notes view (status filter)
 	Entries   bool   // an entry view (Show closed)
@@ -69,9 +71,9 @@ type page struct {
 type notesContent struct{ Rows []noteRow }
 
 type noteRow struct {
-	ID, Task, TaskBase, Title, Repo, Agent, At, Text string
-	Status                                           model.Status
-	OpenPoints                                       int
+	ID, Task, TaskBase, Title, Repo, Child, Agent, At, Text string
+	Status                                                  model.Status
+	OpenPoints                                              int
 	// Branch and Author are the note's own; More* are the other values of its addenda.
 	// Branches and Authors list everything the filters match, one value per line.
 	Branch, Author, Branches, Authors string
@@ -87,14 +89,14 @@ type entriesContent struct {
 }
 
 type entryRow struct {
-	ID, Task, TaskBase, Repo, At, Text, By, Agent, NoteID, State, Search string
-	Branches, Authors                                                    string // of the holder, for the filters
-	Closed                                                               bool
+	ID, Task, TaskBase, Repo, Child, At, Text, By, Agent, NoteID, State, Search string
+	Branches, Authors                                                           string // of the holder, for the filters
+	Closed                                                                      bool
 }
 
 type noteContent struct {
 	ID, Agent, Model, Repo, Task, At, Title string
-	Author, Branch                          string
+	Author, Branch, Child                   string
 	Refs                                    []refView
 	Impacts, Commits                        []string
 	Status, Written                         model.Status
@@ -139,6 +141,7 @@ type dataEntry struct {
 	By    string `json:"by"`
 	Note  string `json:"note"`
 	Agent string `json:"agent"`
+	Child string `json:"child,omitempty"`
 	// Closed is "superseded by <id>" or "resolved by <id>" for a closed entry, else empty,
 	// so a downloaded view never shows a closed entry as current.
 	Closed string `json:"closed,omitempty"`
@@ -204,7 +207,7 @@ func render(s *Site) (map[string][]byte, error) {
 		files["assets/"+a] = b
 	}
 	base := func(title, active string) page {
-		return page{Title: title, Project: s.Project.Name, Generated: s.Generated, Active: active}
+		return page{Title: title, Project: s.Project.Name, Generated: s.Generated, Active: active, Children: s.hasChildren()}
 	}
 
 	p := base("Notes", "notes")
@@ -213,6 +216,7 @@ func render(s *Site) (map[string][]byte, error) {
 	var nf filterSet
 	for _, nv := range s.Notes {
 		nf.add(nv.Header.Task, nv.Header.Repo, nv.Header.Agent)
+		nf.addChild(nv.Child)
 		own := origin{nv.Note.Branch, nv.Note.AuthorName, nv.Note.AuthorEmail}
 		all := []origin{own}
 		for _, a := range nv.Addenda {
@@ -225,7 +229,7 @@ func render(s *Site) (map[string][]byte, error) {
 			Branch: own.branch, Author: own.display(), Branches: branches, Authors: authors,
 			MoreBranches: moreB, MoreAuthors: moreA,
 			ID: nv.Header.ID, Task: nv.Header.Task, TaskBase: taskBase(s.Project, nv.Header.Task),
-			Title: nv.Header.Title, Repo: nv.Header.Repo,
+			Title: nv.Header.Title, Repo: nv.Header.Repo, Child: nv.Child,
 			Agent: nv.Header.Agent, At: nv.Header.At, Status: nv.Header.Status, OpenPoints: nv.OpenPoints,
 			Text: noteSearchText(nv),
 		})
@@ -252,14 +256,15 @@ func render(s *Site) (map[string][]byte, error) {
 		var ef filterSet
 		for _, e := range s.EntriesOf(v.typ) {
 			ef.add(e.Task, e.Repo, e.Agent)
+			ef.addChild(e.Child)
 			holder := origin{e.Branch, e.AuthorName, e.AuthorEmail}
 			ef.addOrigins(holder)
 			branches, authors := matchValues(holder)
 			c.Rows = append(c.Rows, entryRow{
-				ID: e.ID, Task: e.Task, TaskBase: taskBase(s.Project, e.Task), Repo: e.Repo, At: e.At, Text: e.Text, By: e.By, Agent: e.Agent,
+				ID: e.ID, Task: e.Task, TaskBase: taskBase(s.Project, e.Task), Repo: e.Repo, Child: e.Child, At: e.At, Text: e.Text, By: e.By, Agent: e.Agent,
 				NoteID: e.NoteID, Closed: e.Closed, State: stateLabel(e.Type, e.Closed),
 				Branches: branches, Authors: authors,
-				Search: strings.ToLower(strings.Join([]string{e.ID, e.Text, e.Task, e.Repo, e.Agent, e.NoteID,
+				Search: strings.ToLower(strings.Join([]string{e.ID, e.Text, e.Task, e.Repo, e.Child, e.Agent, e.NoteID,
 					e.Branch, e.AuthorName, e.AuthorEmail}, " ")),
 			})
 		}
@@ -316,7 +321,7 @@ func buildData(s *Site) ([]byte, error) {
 		d.Notes[nv.Header.ID] = nv.Markdown
 	}
 	for _, e := range s.Entries {
-		de := dataEntry{Text: e.Text, By: e.By, Note: e.NoteID, Agent: e.Agent}
+		de := dataEntry{Text: e.Text, By: e.By, Note: e.NoteID, Agent: e.Agent, Child: e.Child}
 		if e.Closed {
 			de.Closed = closerVerb(e.Type) + " " + e.ClosedBy
 		}
@@ -393,7 +398,18 @@ func others(own string, l []string) []string {
 }
 
 // filterSet gathers the values of the rows of one view.
-type filterSet struct{ tasks, repos, agents, branches, authors map[string]bool }
+type filterSet struct{ tasks, repos, agents, branches, authors, children map[string]bool }
+
+// addChild records the child a row comes from; the current project (empty) is not offered.
+func (f *filterSet) addChild(child string) {
+	if child == "" {
+		return
+	}
+	if f.children == nil {
+		f.children = map[string]bool{}
+	}
+	f.children[child] = true
+}
 
 // addOrigins records the branch and author of a row; empty values are not offered.
 func (f *filterSet) addOrigins(list ...origin) {
@@ -419,6 +435,9 @@ func (f *filterSet) add(task, repo, agent string) {
 func (f *filterSet) build(p model.Project, status bool) filters {
 	out := filters{Tasks: taskOptions(p, f.tasks), Repos: plainOptions(f.repos), Agents: plainOptions(f.agents),
 		Branches: plainOptions(f.branches), Authors: plainOptions(f.authors)}
+	if len(f.children) > 0 {
+		out.Children = plainOptions(f.children)
+	}
 	if status {
 		out.Statuses = []option{
 			{Value: string(model.StatusDone), Label: "done"}, {Value: string(model.StatusInProgress), Label: "in_progress"},
@@ -495,7 +514,7 @@ func taskBase(p model.Project, task string) string {
 
 func noteSearchText(nv NoteView) string {
 	n := nv.Note
-	parts := []string{nv.Header.ID, nv.Header.Title, nv.Header.Task, nv.Header.Repo, nv.Header.Agent,
+	parts := []string{nv.Header.ID, nv.Header.Title, nv.Header.Task, nv.Header.Repo, nv.Child, nv.Header.Agent,
 		n.Branch, n.AuthorName, n.AuthorEmail, n.Ref}
 	parts = append(parts, nv.TaskRefs...)
 	for _, e := range nv.Note.Entries {
@@ -538,7 +557,7 @@ func buildNote(nv NoteView, owner map[string]string, proj model.Project) noteCon
 		ID: nv.Header.ID, Agent: n.Agent, Model: n.Model, Repo: n.Repo, Task: n.Task, At: n.At, Title: n.Title,
 		Impacts: n.Impacts, Commits: n.Commits, Status: nv.Header.Status, Written: nv.Written,
 		ShowWritten: nv.Written != "" && nv.Written != nv.Header.Status,
-		Author:      authorLine(n.AuthorName, n.AuthorEmail), Branch: n.Branch,
+		Author:      authorLine(n.AuthorName, n.AuthorEmail), Branch: n.Branch, Child: nv.Child,
 	}
 	refs := append([]string{n.Ref}, nv.TaskRefs...)
 	if len(distinct(refs)) == 0 && n.Task != "" {
