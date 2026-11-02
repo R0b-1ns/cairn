@@ -1,5 +1,36 @@
 # Changelog
 
+## [2.0.0](https://github.com/R0b-1ns/cairn/compare/v1.3.0...v2.0.0) (2026-11-02)
+
+
+### ⚠ BREAKING CHANGES
+
+* databases migrate automatically to schema version 5 on first open (a .v4.bak or .v3.bak copy is kept next to them) and older binaries refuse them.
+
+### Features
+
+* **cli:** brief and export include local children ([8da4f4e](https://github.com/R0b-1ns/cairn/commit/8da4f4e49d26227024f33c6e354ed93d57ce5abc))
+* **cli:** open a parent's local children for reading ([fd8ab6d](https://github.com/R0b-1ns/cairn/commit/fd8ab6dab00589230d8bd928dd541fa3574250d6))
+* **cli:** search, list and show include local children ([fc1a240](https://github.com/R0b-1ns/cairn/commit/fc1a240d0a778141466394071311e08ea76f528a))
+* **init:** ignore database backups in git ([63cdbed](https://github.com/R0b-1ns/cairn/commit/63cdbed3a366eebfd508942bc3f3a980393f2ce3))
+* **init:** join an existing project as an attached or local child ([ee6960c](https://github.com/R0b-1ns/cairn/commit/ee6960caf9025561e3353c0e116683ef56cd166d))
+* let a new repo join an existing project (schema version 5) ([c15bc9a](https://github.com/R0b-1ns/cairn/commit/c15bc9a280e600c8a5209a8197edd42829445647))
+* **locate:** follow an attached child's pointer to its parent ([933ed38](https://github.com/R0b-1ns/cairn/commit/933ed3820de258f98234fbd568af70830c03383f))
+* **project:** link and unlink children ([940f816](https://github.com/R0b-1ns/cairn/commit/940f81624294867e5c4b748c2224242f221a0379))
+* **project:** record project ids and report children without a path ([77f006a](https://github.com/R0b-1ns/cairn/commit/77f006abcec7a5d2e01d959b5746d47e072e4270))
+* **registry:** remember project ids and the paths of children ([56933e8](https://github.com/R0b-1ns/cairn/commit/56933e89d0ab7613a33b4911a5e1f697de46bba7))
+* **store:** schema version 5 with an append-only link_events table ([78937d2](https://github.com/R0b-1ns/cairn/commit/78937d239a33de576b20e9e2df5f6f4385ab8017))
+* **view:** include local children ([81e4534](https://github.com/R0b-1ns/cairn/commit/81e4534efd973371b3b8ea89aafaeb25412e7cad))
+
+
+### Bug Fixes
+
+* correct the out-of-date child warning, export the stored project, harden pointer reads ([4a54750](https://github.com/R0b-1ns/cairn/commit/4a54750c4074be7e60bbcc72678e631185020fc3))
+* **init:** accept dotted repo names as children and tighten child init tests ([58a340d](https://github.com/R0b-1ns/cairn/commit/58a340dfb97033b7c0fe119a2a05771f14202b76))
+* **locate:** attach a child only through a linked path and a matching parent id ([0550901](https://github.com/R0b-1ns/cairn/commit/05509014a1acbab1364660a09ac8580cc25dca03))
+* **project:** read children without migrating them, fail closed on unlink, allow re-linking a local child ([56bc475](https://github.com/R0b-1ns/cairn/commit/56bc4751e5349b6ab5a4c673892c8cfd6ad90592))
+* validate and sanitize link data read from untrusted files ([cf7f80a](https://github.com/R0b-1ns/cairn/commit/cf7f80ae663578e864cfe7df9f3d3e6efe094ace))
+
 ## [1.3.0](https://github.com/R0b-1ns/cairn/compare/v1.2.0...v1.3.0) (2026-11-01)
 
 
